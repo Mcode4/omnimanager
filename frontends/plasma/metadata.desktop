@@ -1,0 +1,12 @@
+[Desktop Entry]
+Name=Omnibar
+Comment=AI-powered command launcher
+Icon=system-search
+Type=Service
+ServiceType=Plasma/Applet
+X-Plasma-API=declarativeappletscript
+X-Plasma-MainScript=ui/main.qml
+X-KDE-PluginInfo-Name=omnibar
+X-KDE-PluginInfo-Version=0.1
+X-KDE-PluginInfo-Author=You
+X-KDE-PluginInfo-License=Apache-2.0
