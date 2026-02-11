@@ -52,14 +52,17 @@ ApplicationWindow {
     Connections {
         target: backend
 
-        function onResultReady(result) {
-            // console.log('CONSOLE LOG, RESULT: ', result)
-            resultModel.append({ "text": result })
-            // resultModel.clear()
+        function onResultReady(resultJson) {
+            var result = JSON.parse(resultJson)
 
-            // for (var i = 0; i < results.length; i++) {
-            //     resultModel.append({ "text": results[i] })
-            // }
+            if (result.type === "text" || result.type === "error") {
+                resultModel.append({ "text": result.message })
+            }
+
+            if (result.type === "apps") {
+                resultModel.append({ "text": result.message })
+            }
         }
+
     }
 }

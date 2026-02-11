@@ -10,6 +10,13 @@ def search_files(query: str, search_path: str=os.path.expanduser("~")):
                 matches.append(os.path.join(root, f))
 
     if matches:
-        return f"Found {len(matches)} file(s)"
+        return {
+            "success": True,
+            "message": f"Found {len(matches)} file(s)",
+            "data": matches
+        }
     else:
-        return "No files found matching query"
+        return {
+            "success": False,
+            "message": "No files found matching query"
+        }

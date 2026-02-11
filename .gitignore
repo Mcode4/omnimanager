@@ -1,12 +1,26 @@
-# Ignore virtual environment
-.venv
+# Python
 __pycache__/
-*.pyc
+*.py[cod]
 *.pyo
 *.pyd
-*.swp
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE / editor files
 .idea/
 .vscode/
-*.egg-info/
-dist/
-build/
+*.swp
+*.swo
+
+# Qt / build artifacts
+*.qmlc
+*.rcc
+*.qrc
+*.moc
+
+# OS files
+.DS_Store
+Thumbs.db

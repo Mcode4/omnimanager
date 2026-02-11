@@ -10,7 +10,7 @@ class CommandRouter:
             "open": self.open_app,
         }
     
-    def route(self, text: str) -> str:
+    def route(self, text: str) -> dict:
         if not text.strip():
             return ""
         
@@ -21,20 +21,38 @@ class CommandRouter:
         if command in self.commands:
             return self.commands[command](argument)
         
-        return f"Unkown command: {command}"
+        return {
+            "type": "error",
+            "success": False,
+            "message": f"Unkown command: {command}"
+        }
         
-    def echo(self, arg: str) -> str:
-        return arg
+    def echo(self, arg: str) -> dict:
+        return {
+            "type": "text",
+            "success": True,
+            "message": arg
+        }
     
     def help_command(self, arg: str) -> str:
         return "Available commands: " + ", ".join(self.commands.keys())
     
     def search(self, arg: str) -> str:
         results = search_files(arg)
-        return results
+        return {
+            "type": "files",
+            "success": results["success"],
+            "message": results["message"],
+            "data": results.get("data", {})
+        }
     
     def open_app(self, arg: str) -> str:
         results = find_app(arg)
-        return results["message"]
+        return {
+            "type": "apps",
+            "success": results["success"],
+            "message": results["message"],
+            "data": results.get("data", {})
+        }
 
     
