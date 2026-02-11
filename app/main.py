@@ -1,24 +1,20 @@
 import sys
-from PySide6.QtCore import QObject, Slot, Signal
-from PySide6.QtGui import QGuiApplication
+import os
+from PySide6.QtWidgets import QApplication
 from PySide6.QtQml import QQmlApplicationEngine
+from backend.bridge import BackendBridge
 
-class Backend(QObject):
+app = QApplication(sys.argv)
 
-    @Slot(str)
-    def run_command(self, text):
-        print(f"Command received from UI: {text}")
+engine = QQmlApplicationEngine()
 
-if __name__ == "__main__":
-    app = QGuiApplication(sys.argv)
-    engine = QQmlApplicationEngine()
+bridge = BackendBridge()
+engine.rootContext().setContextProperty("backend", bridge)
 
-    backend = Backend()
-    engine.rootContext().setContextProperty("backend", backend)
+qml_file = os.path.join(os.path.dirname(__file__), "ui", "main.qml")
+engine.load(qml_file)
 
-    engine.load("app/ui/main.qml")
+if not engine.rootObjects():
+    sys.exit(-1)
 
-    if not engine.rootObjects():
-        sys.exit(-1)
-
-    sys.exit(app.exec())
+sys.exit(app.exec())

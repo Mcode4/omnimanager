@@ -10,7 +10,8 @@ ApplicationWindow {
 
     ColumnLayout {
         anchors.fill: parent
-        spacing: 10
+        anchors.margins: 20
+        spacing: 15
 
         TextField {
             id: commandInput
@@ -18,13 +19,47 @@ ApplicationWindow {
             Layout.fillWidth: true
 
             onAccepted: {
-                backend.run_command(text)
+                backend.processCommand(text)
                 text = ""
             }
         }
 
-        Button {
-            text: "Test Button"
+        ListView {
+            id: resultView
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            model: resultModel
+
+            delegate: Rectangle {
+                width: ListView.view.width
+                height: 40
+                color: "#2c2c2c"
+                radius: 6
+
+                Text {
+                    anchors.centerIn: parent
+                    text: model.text
+                    color: "white"
+                }
+            }
+        }
+    }
+
+    ListModel {
+        id: resultModel
+    }
+
+    Connections {
+        target: backend
+
+        function onResultReady(result) {
+            // console.log('CONSOLE LOG, RESULT: ', result)
+            resultModel.append({ "text": result })
+            // resultModel.clear()
+
+            // for (var i = 0; i < results.length; i++) {
+            //     resultModel.append({ "text": results[i] })
+            // }
         }
     }
 }

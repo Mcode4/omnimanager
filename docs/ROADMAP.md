@@ -11,7 +11,6 @@ Goal: A clear, usable, local-first desktop command bar for KDE Plasma.
 
 Planned:
 - Core AI assistant service
-- Rule-based command parsing
 - Application launching
 - Local file search
 - Flatpak packaging
@@ -23,6 +22,9 @@ Out of scope:
 - Cross-desktop support
 - Cloud services
 - Advanced AI orchestration
+
+Considerations:
+- Create custom system commands?
 
 ---
 
