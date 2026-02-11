@@ -5,6 +5,7 @@ import json
 
 class Worker(QObject):
     finished = Signal(str)
+    started = Signal()
 
     def __init__(self):
         super().__init__()
@@ -12,6 +13,7 @@ class Worker(QObject):
 
     @Slot(str)
     def process(self, text):
+        self.started.emit()
         # print('Process Started')
         result = self.router.route(text)
         self.finished.emit(json.dumps(result))
@@ -42,7 +44,9 @@ class Worker(QObject):
 
 class BackendBridge(QObject):
     resultReady = Signal(str)
-    listResultsReady = Signal(str)
+    # listResultsReady = Signal(str)
+    commandStarted = Signal()
+
 
     def __init__(self):
         super().__init__()
@@ -51,6 +55,7 @@ class BackendBridge(QObject):
 
         self.worker.moveToThread(self.thread)
         self.worker.finished.connect(self.resultReady)
+        self.worker.started.connect(self.commandStarted)
 
         self.thread.start()
     

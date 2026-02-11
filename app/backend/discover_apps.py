@@ -61,7 +61,7 @@ def find_app(query: str):
         return {
             "success": True,
             "message": f"Found {len(matches)} app(s)",
-            "data": {"apps": matches}
+            "data": matches
         }
     else:
         return {

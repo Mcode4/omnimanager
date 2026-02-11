@@ -6,8 +6,8 @@ class CommandRouter:
         self.commands = {
             "echo": self.echo,
             "help": self.help_command,
-            "search": self.search,
-            "open": self.open_app,
+            "files": self.search,
+            "apps": self.open_app,
         }
     
     def route(self, text: str) -> dict:
