@@ -1,173 +1,101 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import "components"
 
 ApplicationWindow {
     visible: true
     width: 1000
-    height: 700
+    height: 600
     title: "OmniManager"
-    property bool loading: false
 
-    header: ToolBar {
-        RowLayout {
-            anchors.fill: parent
-            spacing: 10
+    property int currentPage: 0
+    property bool sidebarVisible: true
 
-            MenuBar {
-                Menu {
-                    title: "File"
-                    MenuItem { text: "New Session" }
-                    MenuItem { text: "Open" }
-                    MenuSeparator {}
-                    MenuItem { text: "Quit"; onTriggered: Qt.quit() }
-                }
-
-                Menu {
-                    title: "Edit"
-                    MenuItem { text: "Copy" }
-                    MenuItem { text: "Paste" }
-                }
-
-                Menu {
-                    title: "View"
-                    MenuItem { text: "Toggle Sidebar" }
-                    MenuItem { text: "Toogle Tabs" }
-                }
-
-                Menu {
-                    title: "Terminal"
-                    MenuItem { text: "Open Terminal" }
-                    MenuSeparator {}
-                    MenuItem { text: "Terminal Settings" }
-                }
-            }
-
-            // Push Layout to Right
-            Item { Layout.fillWidth: true}
-
-            Rectangle {
-                Layout.preferredWidth: 420
-                height: 36
-                radius: 6
-                color: "#2c2c2c"
-                border.color: "#444"
-
-                RowLayout {
-                    anchors.fill: parent
-                    spacing: 0
-
-                    // Category Dropdown
-                    ComboBox {
-                        id: categorySelector
-                        model: ["All", "Files", "Apps", "Notes"]
-                        currentIndex: 0
-                        width: 110
-                        Layout.fillHeight: true
-                    }
-
-                    Rectangle {
-                        width: 1
-                        color: "#444"
-                        Layout.fillHeight: true
-                    }
-
-                    // Search Field
-                    TextField {
-                        id: commandInput
-                        placeholderText: loading ? "Processing..." : "Type a command..."
-                        Layout.fillWidth: true
-                        background: null
-                        enabled: !loading
-                        color: "white"
-                        onAccepted: {
-                            loading = true
-                            resultModel.clear()
-
-                            let category = categorySelector.currentText.toLowerCase()
-                            let query = category + " " + text
-
-                            backend.processCommand(query)
-                            text = ""
-                        }
-                    }  
-                }
-            }
-
-            BusyIndicator {
-                running: loading
-                visible: loading
-                Layout.alignment: Qt.AlignHCenter
-            }
-        }
-    }
-
-    ColumnLayout {
+    RowLayout {
         anchors.fill: parent
-        anchors.margins: 20
-        spacing: 15
-        
-        ListView {
-            id: resultView
-            Layout.fillWidth: true
+
+        // 1. Icon Sidebar
+        Rectangle {
+            id: sidebar
+            width: sidebarVisible ? 60 : 0
+            color: '#c0c0c0'
             Layout.fillHeight: true
-            model: resultModel
 
-            delegate: Rectangle {
-                width: ListView.view.width
-                height: 40
-                color: "#2c2c2c"
-                radius: 6
-
-                Text {
-                    anchors.centerIn: parent
-                    text: model.text
-                    color: "white"
-                }
-            }
-        }
-    }
-
-    ListModel {
-        id: resultModel
-    }
-
-    Connections {
-        target: backend
-
-        function onCommandStarted() {
-            loading = true
-        }
-
-        function onResultReady(resultJson) {
-            var result = JSON.parse(resultJson)
-            loading = false
-
-            if (result.type === "text" || result.type === "error") {
-                resultModel.append({ "text": result.message })
+            Behavior on width {
+                NumberAnimation { duration: 200; easing.type: Easing.InOutQuad }
             }
 
-            if (result.type === "apps") {
-                resultModel.append({ "text": result.message })
+            Column {
+                anchors.centerIn: parent
+                spacing: 10
 
-                if(result.success) {
-                    for(let key of Object.keys(result.data)) {
-                        resultModel.append({ "text": key})
+                Repeater {
+                    model: [
+                        { icon: "Icons/chat.svg" },
+                        { icon: "Icons/files.svg" },
+                        { icon: "Icons/database.svg" },
+                        { icon: "Icons/notebook.svg" },
+                        { icon: "Icons/settings.svg" },
+                        { icon: "Icons/logs.svg" }
+                    ]
+
+                    delegate: SidebarButton {
+                        buttonIcon: modelData.icon
+                        checked: currentPage === index
+                        onClicked: {
+                            if(currentPage === index) {
+                                sidebarVisible = !sidebarVisible
+                            } else {
+                                currentPage = index
+                                sidebarVisible = true
+                            }
+                        }
                     }
                 }
             }
+        }
+        
 
-            if (result.type === "files") {
-                resultModel.append({ "text": result.message })
+        // 2. Sidebar Context
+        Rectangle {
+            id: sidebarContext
+            width: sidebarVisible ? 220 : 0
+            color: "#c0c0c0"
+            Layout.fillHeight: true
 
-                if(result.success) {
-                    // console.log('RESULT DATA', result.data)
-                    result.data.forEach(r => {
-                        resultModel.append({ "text": r})
-                    })
+            Behavior on width {
+                NumberAnimation { duration: 200; easing.type: EasingInOutQuad }
+            }
+
+            Loader {
+                anchors.fill: parent
+                source: {
+                    switch (currentPage) {
+                        case 0: return "pages/Chat/ChatSidebar.qml"
+                        case 1: return "pages/Files/FilesSidebar.qml"
+                        case 2: return "pages/Database/DatabaseSidebar.qml"
+                        case 3: return "pages/Notes/NotesSidebar.qml"
+                        case 4: return "pages/Settings/SettingsSidebar.qml"
+                        case 5: return "pages/Logs/LogsSidebar.qml"
+                    }
                 }
             }
         }
 
+        // 3. Main Content
+        Loader {
+                Layout.fillWidth: true
+                source: {
+                    switch (currentPage) {
+                        case 0: return "pages/Chat/ChatPage.qml"
+                        case 1: return "pages/Files/FilesPage.qml"
+                        case 2: return "pages/Database/DatabasePage.qml"
+                        case 3: return "pages/Notes/NotesPage.qml"
+                        case 4: return "pages/Settings/SettingsPage.qml"
+                        case 5: return "pages/Logs/LogsPage.qml"
+                    }
+                }
+            }
     }
 }

@@ -12,6 +12,7 @@ requires-python = ">=3.12"
 dependencies = [
     "PySide6>=6.5",
     "pyxdg>=0.28",
+    "llama-cpp-python"
 ]
 
 [build-system]
