@@ -1,24 +1,62 @@
 import sys
 import os
+import yaml
+import time
 from PySide6.QtWidgets import QApplication
 from PySide6.QtQml import QQmlApplicationEngine
 from backend.bridge import BackendBridge
 from backend.db.user_db import UserDatabase as Database
 from backend.db.system_db import SystemDatabase
+from backend.ai.model_manager import ModelManager
+from backend.settings import Settings
+from backend.ai.llm_engine import LLMEngine
+from backend.ai.embeddings_engine import EmbeddingEngine
+from backend.ai.rag_pipeline import RAGPipeline
+from backend.ai.orchestrator import Orchestrator
+
+DEFAULT_CONFIG_PATH = os.path.join("config", "models.yaml")
+USER_CONFIG_PATH = os.path.expanduser("~/.local/share/omnimanager/models.yaml")
+
+def load_config():
+    # Priority: user config > default config
+    path = USER_CONFIG_PATH if os.path.exists(USER_CONFIG_PATH) else DEFAULT_CONFIG_PATH
+    with open(path, "r") as f:
+        time.sleep(10)
+        return yaml.safe_load(f)
+
 
 app = QApplication(sys.argv)
-system_db = SystemDatabase()
-db = Database()
+current_tasks = { "ai": 0, "system": 0 }
+
+config = load_config()
+db_paths = config.get("databases", {})
+
+system_db = SystemDatabase(db_paths.get("system", "~/.local/share/omnimanager/system.db"))
+db = Database(db_paths.get("user", "~/.local/share/omnimanager/system.db"))
+
+model_manager = ModelManager()
+model_manager.load_models_from_config(config)
+
+settings = Settings(model_manager, config)
+settings.load_settings()
+
+llm_engine = LLMEngine(model_manager, settings)
+embedding_engine = EmbeddingEngine(next((m for m in config.get("models", []) if m.get("backend") == "embedding"), None))
+rag_pipeline = RAGPipeline(db, embedding_engine, settings)
+orchestrator = Orchestrator(llm_engine, rag_pipeline, settings)
 
 engine = QQmlApplicationEngine()
 
-bridge = BackendBridge()
+bridge = BackendBridge(current_tasks, settings, orchestrator)
 engine.rootContext().setContextProperty("backend", bridge)
+engine.rootContext().setContextProperty("settings", settings)
 
 qml_file = os.path.join(os.path.dirname(__file__), "ui", "main.qml")
 engine.load(qml_file)
+
 
 if not engine.rootObjects():
     sys.exit(-1)
 
 sys.exit(app.exec())
+

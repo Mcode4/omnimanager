@@ -3,19 +3,22 @@ import sqlite3
 import shutil
 from datetime import datetime
 
-APP_DIR = os.path.expanduser("~/.local/share/omnimanager")
-SYSTEM_DB_PATH = os.path.join(APP_DIR, "system.db")
-BACKUP_DB_PATH = os.path.join(APP_DIR, "system_backup.db")
+# APP_DIR = os.path.expanduser("~/.local/share/omnimanager")
 
 
 class SystemDatabase:
-    def __init__(self):
-        os.makedirs(APP_DIR, exist_ok=True)
+    def __init__(self, db_path=None):
+        db_path = db_path or os.path.expanduser("~/.local/share/omnimanager/user.db")
+        self.APP_DIR = os.path.dirname(db_path)
+        self.SYSTEM_DB_PATH = db_path
+        self.BACKUP_DB_PATH = os.path.join(self.APP_DIR, "system_backup.db")
+
+        os.makedirs(self.APP_DIR, exist_ok=True)
 
         self._ensure_integrity()
 
         self.conn = sqlite3.connect(
-            SYSTEM_DB_PATH,
+            self.SYSTEM_DB_PATH,
             check_same_thread=False
         )
         self.conn.row_factory = sqlite3.Row
@@ -29,11 +32,11 @@ class SystemDatabase:
     # =========================
 
     def _ensure_integrity(self):
-        if not os.path.exists(SYSTEM_DB_PATH):
+        if not os.path.exists(self.SYSTEM_DB_PATH):
             return
 
         try:
-            conn = sqlite3.connect(SYSTEM_DB_PATH)
+            conn = sqlite3.connect(self.SYSTEM_DB_PATH)
             cursor = conn.cursor()
             cursor.execute("PRAGMA integrity_check;")
             result = cursor.fetchone()[0]
@@ -45,17 +48,17 @@ class SystemDatabase:
         except Exception:
             print("⚠️ Database corrupted. Attempting rollback...")
 
-            if os.path.exists(BACKUP_DB_PATH):
-                shutil.copy(BACKUP_DB_PATH, SYSTEM_DB_PATH)
+            if os.path.exists(self.BACKUP_DB_PATH):
+                shutil.copy(self.BACKUP_DB_PATH, self.SYSTEM_DB_PATH)
                 print("✅ Restored from backup.")
             else:
-                corrupted_name = SYSTEM_DB_PATH + ".corrupt_" + datetime.now().strftime("%Y%m%d%H%M%S")
-                shutil.move(SYSTEM_DB_PATH, corrupted_name)
+                corrupted_name = self.SYSTEM_DB_PATH + ".corrupt_" + datetime.now().strftime("%Y%m%d%H%M%S")
+                shutil.move(self.SYSTEM_DB_PATH, corrupted_name)
                 print("⚠️ No backup found. Created new DB.")
 
     def _create_backup(self):
-        if os.path.exists(SYSTEM_DB_PATH):
-            shutil.copy(SYSTEM_DB_PATH, BACKUP_DB_PATH)
+        if os.path.exists(self.SYSTEM_DB_PATH):
+            shutil.copy(self.SYSTEM_DB_PATH, self.self.BACKUP_DB_PATH)
 
     # =========================
     # INITIALIZATION

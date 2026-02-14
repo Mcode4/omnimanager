@@ -65,7 +65,7 @@ ApplicationWindow {
             Layout.fillHeight: true
 
             Behavior on width {
-                NumberAnimation { duration: 200; easing.type: EasingInOutQuad }
+                NumberAnimation { duration: 200; easing.type: InOutQuad }
             }
 
             Loader {

@@ -2,38 +2,73 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 
-// Item {
-//     ColumnLayout {
-//         anchors.fill: parent
-//         anchors.margins: 20
+ColumnLayout {
+    anchors.fill: parent
+    spacing: 10
 
-//         Label {
-//             text: "AI Chat"
-//             font.pixelSize: 22
-//         }
+    property bool isLoading: false
 
-//         Label {
-//             text: "Chat interface coming soon..."
-//             color: "#888"
-//         }
-//     }
-// }
+    // Chat Log
+    ScrollView {
+        Layout.fillWidth: true
+        Layout.fillHeight: true
 
-ApplicationWindow {
+        TextArea {
+            id: chatLog
+            readOnly: true
+            wrapMode: Text.Wrap
+            text: ""
+        }
+    }
+
+    // Loading Indicator
+    Label {
+        visible: isLoading
+        text: "Thinking..."
+        color: "gray"
+    }
+
+    // Input Row
     RowLayout {
-        spacing: 10
+        Layout.fillWidth: true
 
         TextField {
-            text: chatTitle
+            id: inputField
+            Layout.fillWidth: true
+            placeholderText: "Type a message..."
+
+            onAccepted: sendMessage()
         }
 
-        ComboBox {
-            id: modelSelector
-            model: ["llama3", "mistral", "phi3"]
+        Button {
+            text: "Send"
+            onClicked: sendMessage()
+        }
+    }
+
+    function sendMessage() {
+        if(inputField.text.trim() === "") return
+
+        chatLog.text += "\n\nYou: " + inputField.text
+        backend.processAIRequest(inputField.text)
+
+        inputField.text = ""
+    }
+
+    // Backend Connections
+    Connections {
+        target: backend
+
+        function onAiStarted() {
+            isLoading = true
         }
 
-        ToolButton {
-            text: "⚙"
+        function onAiResults(result) {
+            if(result.success) {
+                chatLog.text += "\n\nAI: " + result.text
+            } else {
+                chatLog.text += "\n\nError: " + result.error
+            }
         }
     }
 }

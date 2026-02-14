@@ -1,16 +1,17 @@
 import os
 import sqlite3
 from datetime import datetime, timedelta
-
-APP_DIR = os.path.expanduser("~/.local/share/omnimanager")
-USER_DB_PATH = os.path.join(APP_DIR, "user.db")
+import numpy as np
 
 
 class UserDatabase:
-    def __init__(self):
-        os.makedirs(APP_DIR, exist_ok=True)
+    def __init__(self, db_path=None):
+        db_path = db_path or os.path.expanduser("~/.local/share/omnimanager")
+        self.APP_DIR = os.path.dirname(db_path)
+        self.USER_DB_PATH = db_path
 
-        self.conn = sqlite3.connect(USER_DB_PATH, check_same_thread=False)
+        os.makedirs(self.APP_DIR, exist_ok=True)
+        self.conn = sqlite3.connect(self.USER_DB_PATH, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
 
         self._configure()
@@ -116,15 +117,24 @@ class UserDatabase:
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
                              
-        CREATE TABLE IF NOT EXISTS note_chunks (
+        CREATE TABLE IF NOT EXISTS documents (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            note_id INTEGER,
-            chunk_index INTEGER,
-            content TEXT,
-            embedding BLOB,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY(note_id) REFERENCES notes(id) ON DELETE CASCADE
+            title TEXT,
+            source TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
+
+        CREATE TABLE IF NOT EXISTS document_chunks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            document_id INTEGER,
+            content TEXT NOT NULL,
+            embedding BLOB NOT NULL,
+            chunk_index INTEGER,
+            FOREIGN KEY(document_id)
+                REFERENCES documents(id)
+                ON DELETE CASCADE
+        );
+
 
         """)
 
@@ -292,3 +302,49 @@ class UserDatabase:
     # -------------------------------------------------
     def close(self):
         self.conn.close()
+    
+    def create_document(self, title, source=None):
+        cursor = self.conn.cursor()
+        cursor.execute(
+            """
+            Insert INTO documents (title, source)
+            VALUES (?, ?)
+            """,
+            (title, source)
+        )
+        self.conn.commit()
+        return cursor.lastrowid
+    
+    def add_document_chunk(self, document_id, content, embedding, chunk_index):
+        cursor = self.conn.cursor()
+
+        embedding_blob = embedding.astype(np.float32).tobytes()
+
+        cursor.execute(
+            """
+            INSERT INTO document_chunks
+            (document_id, content, embedding, chunk_index)
+            VALUES (?, ?, ?, ?)
+            """,
+            (document_id, content, embedding_blob, chunk_index)
+        )
+
+        self.conn.commit()
+    
+    def get_all_chunks(self):
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT * FROM document_chunks")
+
+        rows = cursor.fetchall()
+
+        results = []
+        for r in rows:
+            results.append({
+                "id": r["id"],
+                "document_id": r["document_id"],
+                "content": r["content"],
+                "embedding": np.frombuffer(r["embedding"], dtype=np.float32)
+            })
+
+        return results
+
