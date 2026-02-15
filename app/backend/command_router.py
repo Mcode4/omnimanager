@@ -1,5 +1,6 @@
 from backend.tools.search_files import search_files
 from backend.tools.discover_apps import find_app
+from backend.db.system_db import SystemDatabase
 
 class CommandRouter:
     def __init__(self):
@@ -7,7 +8,7 @@ class CommandRouter:
             "echo": self.echo,
             "help": self.help_command,
             "files": self.search,
-            "apps": self.open_app,
+            "apps": self.open_app
         }
     
     def route(self, text: str) -> dict:
@@ -54,5 +55,3 @@ class CommandRouter:
             "message": results["message"],
             "data": results.get("data", {})
         }
-
-    

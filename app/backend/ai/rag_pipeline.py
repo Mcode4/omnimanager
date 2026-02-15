@@ -1,8 +1,10 @@
-from PySide6.QtCore import QObject
 import numpy as np
+from PySide6.QtCore import QObject
+from backend.ai.embeddings_engine import EmbeddingEngine
+from backend.settings import Settings
 
 class RAGPipeline(QObject):
-    def __init__(self, db, embedding_engine, settings):
+    def __init__(self, db, embedding_engine: EmbeddingEngine, settings: Settings):
         super().__init__()
         self.db = db
         self.embedding_engine = embedding_engine

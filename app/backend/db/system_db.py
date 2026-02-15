@@ -8,7 +8,7 @@ from datetime import datetime
 
 class SystemDatabase:
     def __init__(self, db_path=None):
-        db_path = db_path or os.path.expanduser("~/.local/share/omnimanager/user.db")
+        db_path = db_path or os.path.expanduser("~/.local/share/omnimanager/system.db")
         self.APP_DIR = os.path.dirname(db_path)
         self.SYSTEM_DB_PATH = db_path
         self.BACKUP_DB_PATH = os.path.join(self.APP_DIR, "system_backup.db")
@@ -58,7 +58,7 @@ class SystemDatabase:
 
     def _create_backup(self):
         if os.path.exists(self.SYSTEM_DB_PATH):
-            shutil.copy(self.SYSTEM_DB_PATH, self.self.BACKUP_DB_PATH)
+            shutil.copy(self.SYSTEM_DB_PATH, self.BACKUP_DB_PATH)
 
     # =========================
     # INITIALIZATION
@@ -71,8 +71,6 @@ class SystemDatabase:
             CREATE TABLE IF NOT EXISTS chats (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 title TEXT NOT NULL,
-                system_prompt TEXT,
-                temperature REAL DEFAULT 0.7,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 pinned INTEGER DEFAULT 0
             );
@@ -127,6 +125,17 @@ class SystemDatabase:
         )
         self.conn.commit()
         return cursor.lastrowid
+    
+    def edit_chat_title(self, title, id):
+        cursor = self.conn.cursor()
+        cursor.execute (
+            """
+                UPDATE chats
+                SET title=?
+                WHERE id=?
+            """, (title, id,)
+        )
+        self.conn.commit()
 
     def delete_chat(self, chat_id):
         cursor = self.conn.cursor()
@@ -136,6 +145,12 @@ class SystemDatabase:
     # =========================
     # MESSAGE METHODS
     # =========================
+
+    def get_message_by_id(self, id):
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT * FROM messages WHERE id=?", (id,))
+        message = cursor.fetchone()
+        return dict(message) if message else None
 
     def get_messages_by_chat(self, chat_id):
         cursor = self.conn.cursor()
@@ -153,6 +168,7 @@ class SystemDatabase:
             (chat_id, role, content)
         )
         self.conn.commit()
+        return cursor.lastrowid
 
     # =========================
     # NOTES METHODS
@@ -226,7 +242,7 @@ class SystemDatabase:
         row = cursor.fetchone()
         return row["value"] if row else None
 
-    def set_setting(self, key, value):
+    def set_settings(self, key, value):
         cursor = self.conn.cursor()
         cursor.execute(
             """
@@ -237,24 +253,3 @@ class SystemDatabase:
             (key, value)
         )
         self.conn.commit()
-
-        cursor = self.conn.cursor()
-        try:
-            cursor.execute(
-                """
-                """
-            )
-            self.conn.commit()
-        
-        except Exception as e:
-            errorRes = {
-                "message": f"Error occured while changing settings",
-                "error": e,
-                "level": ""
-            }
-            print(errorRes)
-            return errorRes
-        return {
-            "message": f"Successfully changed settings",
-            "level": ""
-        }

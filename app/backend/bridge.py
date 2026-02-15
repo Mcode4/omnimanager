@@ -1,8 +1,11 @@
-from PySide6.QtCore import QObject, Slot, Signal, QThread
-from backend.router.command_router import CommandRouter
 import os
 import json
 from collections import deque
+from PySide6.QtCore import QObject, Slot, Signal, QThread
+from backend.command_router import CommandRouter
+from backend.settings import Settings
+from backend.services.chat_service import ChatService
+
 
 class SystemWorker(QObject):
     finished = Signal(str)
@@ -24,15 +27,17 @@ class AIWorker(QObject):
     finished = Signal(dict)
     started = Signal()
 
-    def __init__(self, orchestrator):
+    def __init__(self, chat_service: ChatService):
         super().__init__()
-        self.orchestrator = orchestrator
+        self.chat_service = chat_service
 
-    @Slot(str)
-    def process(self, prompt):
+    @Slot(tuple)
+    def process(self, request):
         self.started.emit()
+        chat_id, prompt = request
+        print(f'CHAT ID: {chat_id} PROMPT: {prompt}')
         try:
-            result = self.orchestrator.run(prompt)
+            result = self.chat_service.send_message(chat_id, prompt)
         except Exception as e:
             result = {
                 "success": False,
@@ -46,16 +51,16 @@ class BackendBridge(QObject):
     systemStarted = Signal()
     systemResults = Signal(str)
 
-    aiSignal = Signal(str)
+    aiSignal = Signal(tuple)
     aiStarted = Signal()
     aiResults = Signal(dict)
 
-    def __init__(self, current_tasks, settings, orchestrator):
+    def __init__(self, current_tasks, settings: Settings, chat_service: ChatService):
         super().__init__()
         self.system_thread = QThread()
         self.system_worker = SystemWorker()
         self.ai_thread = QThread()
-        self.ai_worker = AIWorker(orchestrator)
+        self.ai_worker = AIWorker(chat_service)
 
         self.system_queue = deque()
         self.ai_queue = deque()
@@ -79,7 +84,7 @@ class BackendBridge(QObject):
         self.ai_thread.start()
 
     @Slot(str)
-    def processSystemCommand(self, text):
+    def processSystemCommand(self, text: str):
         text = text.strip()
         print(f"Command received from UI: {text}")
         self.system_queue.append(text)
@@ -98,10 +103,10 @@ class BackendBridge(QObject):
         self.systemResults.emit(results)
         self._try_process_next()
 
-    @Slot(str)
-    def processAIRequest(self, prompt):
-        self.ai_queue.append(prompt)
-        print(f"Prompt received from UI: {prompt}")
+    @Slot(int, str)
+    def processAIRequest(self, chat_id: int, prompt: str):
+        self.ai_queue.append((chat_id, prompt))
+        print(f"Prompt received from UI at Chat ID({chat_id}): {prompt}")
         self._try_process_next_ai()
 
     def _try_process_next_ai(self):
@@ -117,4 +122,6 @@ class BackendBridge(QObject):
         print(f"\n\nPrompt Complete: {results}")
         self.aiResults.emit(results)
         self._try_process_next_ai()
+
+    
 

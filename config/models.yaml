@@ -1,3 +1,6 @@
+system:
+  device: auto
+
 databases:
   system: ~/.local/share/omnimanager/system.db
   user:   ~/.local/share/omnimanager/user.db
@@ -5,24 +8,19 @@ databases:
 models:
   - name: instruct
     backend: llama-cpp
-    model: LiquidAI/LFM2.5-1.2B-Instruct-GGUF:Q4_K_M
-    parameters:
-      temperature: 0.0
-      max_tokens: 512
+    model: models/llama/LiquidAI_LFM2.5-1.2B-Instruct-GGUF_LFM2.5-1.2B-Instruct-Q4_K_M.gguf
 
   - name: thinking
     backend: llama-cpp
-    model: LiquidAI/LFM2.5-1.2B-Thinking-GGUF:Q4_K_M
-    parameters:
-      temperature: 0.6
-      max_tokens: 512
+    model: models/llama/LiquidAI_LFM2.5-1.2B-Thinking-GGUF_LFM2.5-1.2B-Thinking-Q4_K_M.gguf
+    # parameters:
+    #   max_context: 1024
 
   - name: vision
-    backend: llama-cpp
-    model: LiquidAI/LFM2.5-VL-1.6B-GGUF:Q4_0
-    parameters:
-      temperature: 0.7
-      max_tokens: 512
+    backend: vision
+    model: models/vision/Janus-Pro-1.3B
+    # parameters:
+    #   max_context: 1024
 
   - name: bge-small
     backend: embedding

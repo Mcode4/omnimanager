@@ -7,6 +7,7 @@ ColumnLayout {
     spacing: 10
 
     property bool isLoading: false
+    property int chat_id: 0
 
     // Chat Log
     ScrollView {
@@ -47,10 +48,11 @@ ColumnLayout {
     }
 
     function sendMessage() {
-        if(inputField.text.trim() === "") return
+        let input = inputField.text.trim()
+        if(input === "") return
 
         chatLog.text += "\n\nYou: " + inputField.text
-        backend.processAIRequest(inputField.text)
+        backend.processAIRequest(chat_id, input)
 
         inputField.text = ""
     }
@@ -64,6 +66,9 @@ ColumnLayout {
         }
 
         function onAiResults(result) {
+            chat_id = result.chat_id
+            isLoading = false
+
             if(result.success) {
                 chatLog.text += "\n\nAI: " + result.text
             } else {

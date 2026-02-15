@@ -6,7 +6,7 @@ import numpy as np
 
 class UserDatabase:
     def __init__(self, db_path=None):
-        db_path = db_path or os.path.expanduser("~/.local/share/omnimanager")
+        db_path = db_path or os.path.expanduser("~/.local/share/omnimanager/user.db")
         self.APP_DIR = os.path.dirname(db_path)
         self.USER_DB_PATH = db_path
 
@@ -53,6 +53,7 @@ class UserDatabase:
             type TEXT,
             category TEXT,
             content TEXT NOT NULL,
+            embedding BLOB,
             source TEXT,
             importance INTEGER DEFAULT 1,
             confidence REAL DEFAULT 1.0,
@@ -182,6 +183,52 @@ class UserDatabase:
         except Exception as e:
             self.conn.rollback()
             return {"success": False, "error": str(e)}
+        
+    def add_memory_with_embedding(self, type_, category, content, embedding, source="ai", importance=1, confidence=1.0):
+        try:
+            cursor = self.conn.cursor()
+            embedding_blob = embedding.astype(np.float32).tobytes()
+
+            cursor.execute("""
+                INSERT INTO memory
+                (type, category, content, embedding, source,
+                importance, confidence)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (type_, category, content, embedding_blob,
+            source, importance, confidence))
+
+            self.conn.commit()
+            return {"success", True}
+        except Exception as e:
+            self.conn.rollback()
+            return{"success": False, "error": str(e)}
+        
+    def search_memory_by_embedding(self, query_embedding, limit=5):
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            SELECT id, content, embedding, importance, decay_score
+            FROM memory
+            WHERE embedding IS NOT NULL
+        """)
+        rows = cursor.fetchall()
+        results = []
+
+        for r in rows:
+            stored_embedding = np.frombuffer(
+                r["embedding"],
+                dtype=np.float32
+            )
+            similarity = np.dot(query_embedding, stored_embedding)
+            score = similarity * r["importance"] * r["decay_score"]
+
+            results.append({
+                "id": r["id"],
+                "content": r["content"],
+                "score": score
+            })
+
+        results.sort(key=lambda x: x["score"], reverse=True)
+        return results[:limit]
 
     def get_relevant_memory(self, min_importance=1, limit=20):
         cursor = self.conn.cursor()

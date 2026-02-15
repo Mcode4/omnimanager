@@ -9,13 +9,29 @@ class Settings(QObject):
         self._settings = {
             "model_settings": {
                 "thinking": {
-                    "max_tokens": 512,
-                    "temperature": 0.6
+                    "max_tokens": 1024,
+                    "max_context": 1024,
+                    "temperature": 0.3,
+                    "top_k": 50,
+                    "top_p": 0.9,
+                    "min_p": 0.2,
+                    "repetition_penalty": 2,
+                    "mirostat_mode": 2
                 },
                 "instruct": {
-                    "max_tokens": 512,
-                    "temperature": 0.7
+                    "max_tokens": 1024,
+                    "max_context": 1024,
+                    "temperature": 0.25,
+                    "top_k": 50,
+                    "top_p": 0.9,
+                    "min_p": 0.2,
+                    "repetition_penalty": 1.5,
+                    "mirostat_mode": 0
                 }
+            },
+            "generate_settings": {
+                "streamer": True,
+                "do_sample": True
             },
             "embedding_settings": {
                 "top_max_embedding_scan": 5,
@@ -24,8 +40,12 @@ class Settings(QObject):
             },
             "max_tasks": {
                 "ai_tasks": 3,
-                "system_tasks": 2
-            }
+                "system_tasks": 2,
+                "async_tasks": 1
+            },
+            "max_messages": 12,
+            "summarize_messages": True,
+            "error_popups": True
         }
 
     def load_settings(self):
