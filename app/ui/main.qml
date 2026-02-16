@@ -18,13 +18,9 @@ ApplicationWindow {
         // 1. Icon Sidebar
         Rectangle {
             id: sidebar
-            width: sidebarVisible ? 60 : 0
+            width: 60
             color: '#c0c0c0'
             Layout.fillHeight: true
-
-            Behavior on width {
-                NumberAnimation { duration: 200; easing.type: Easing.InOutQuad }
-            }
 
             Column {
                 anchors.centerIn: parent
@@ -69,6 +65,7 @@ ApplicationWindow {
             }
 
             Loader {
+                id: sidebarLoader
                 anchors.fill: parent
                 source: {
                     switch (currentPage) {
@@ -80,22 +77,37 @@ ApplicationWindow {
                         case 5: return "pages/Logs/LogsSidebar.qml"
                     }
                 }
+                onLoaded: {
+                    console.log("MAIN TEST 1: IS ITEM?")
+                    if (item){
+                        console.log("MAIN TEST 1 TRUE\nMAIN TEST 2: FUNCTION LOAD?")
+                        item.chatSelected.connect(function(id) {
+                            console.log("MAIN TEST 2 TRUE\nMAIN TEST 3: MAIN LOADER ITEMS?")
+                            if(mainLoader.item && mainLoader.item.loadMessages) {
+                                console.log('MAIN TEST 3 TRUE.. ATTEMPT TO LOAD MESSAGES')
+                                mainLoader.item.loadMessages(id)
+                            }
+                        })
+                    }
+                }
             }
         }
 
         // 3. Main Content
         Loader {
-                Layout.fillWidth: true
-                source: {
-                    switch (currentPage) {
-                        case 0: return "pages/Chat/ChatPage.qml"
-                        case 1: return "pages/Files/FilesPage.qml"
-                        case 2: return "pages/Database/DatabasePage.qml"
-                        case 3: return "pages/Notes/NotesPage.qml"
-                        case 4: return "pages/Settings/SettingsPage.qml"
-                        case 5: return "pages/Logs/LogsPage.qml"
-                    }
+            id: mainLoader
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            source: {
+                switch (currentPage) {
+                    case 0: return "pages/Chat/ChatPage.qml"
+                    case 1: return "pages/Files/FilesPage.qml"
+                    case 2: return "pages/Database/DatabasePage.qml"
+                    case 3: return "pages/Notes/NotesPage.qml"
+                    case 4: return "pages/Settings/SettingsPage.qml"
+                    case 5: return "pages/Logs/LogsPage.qml"
                 }
             }
+        }
     }
 }

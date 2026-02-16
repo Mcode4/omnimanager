@@ -9,6 +9,7 @@ class Settings(QObject):
         self._settings = {
             "model_settings": {
                 "thinking": {
+                    "enabled": True,
                     "max_tokens": 1024,
                     "max_context": 1024,
                     "temperature": 0.3,
@@ -31,7 +32,8 @@ class Settings(QObject):
             },
             "generate_settings": {
                 "streamer": True,
-                "do_sample": True
+                "stream_when": "both"
+                # "stream_when": "thinking, instruct, or both"
             },
             "embedding_settings": {
                 "top_max_embedding_scan": 5,

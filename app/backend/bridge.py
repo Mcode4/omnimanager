@@ -24,26 +24,21 @@ class SystemWorker(QObject):
         # print(f'Process Finished\n\n RESULTS: {result}')
 
 class AIWorker(QObject):
-    finished = Signal(dict)
     started = Signal()
+    tokenGenerated = Signal(str, str)
+    finished = Signal(dict)
 
     def __init__(self, chat_service: ChatService):
         super().__init__()
         self.chat_service = chat_service
+        self.chat_service.tokenGenerated.connect(self.tokenGenerated)
 
     @Slot(tuple)
     def process(self, request):
         self.started.emit()
         chat_id, prompt = request
         print(f'CHAT ID: {chat_id} PROMPT: {prompt}')
-        try:
-            result = self.chat_service.send_message(chat_id, prompt)
-        except Exception as e:
-            result = {
-                "success": False,
-                "error": str(e)
-            }
-        self.finished.emit(result)
+        self.chat_service.send_message(chat_id, prompt)
 
 
 class BackendBridge(QObject):
@@ -53,6 +48,7 @@ class BackendBridge(QObject):
 
     aiSignal = Signal(tuple)
     aiStarted = Signal()
+    aiToken = Signal(str, str)
     aiResults = Signal(dict)
 
     def __init__(self, current_tasks, settings: Settings, chat_service: ChatService):
@@ -78,7 +74,9 @@ class BackendBridge(QObject):
 
         self.aiSignal.connect(self.ai_worker.process)
         self.ai_worker.started.connect(self.aiStarted)
-        self.ai_worker.finished.connect(self._on_ai_finished)
+        self.ai_worker.tokenGenerated.connect(self.aiToken)
+        
+        chat_service.finished.connect(self._on_ai_finished)
 
         self.system_thread.start()
         self.ai_thread.start()
@@ -122,6 +120,14 @@ class BackendBridge(QObject):
         print(f"\n\nPrompt Complete: {results}")
         self.aiResults.emit(results)
         self._try_process_next_ai()
+
+    @Slot(result="QVariantList")
+    def getChats(self):
+        return self.ai_worker.chat_service.system_db.get_chats()
+    
+    @Slot(int, result="QVariantList")
+    def getMessages(self, chat_id):
+        return self.ai_worker.chat_service.system_db.get_messages_by_chat(chat_id)
 
     
 

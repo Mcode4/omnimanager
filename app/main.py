@@ -65,6 +65,10 @@ engine.load(qml_file)
 
 
 if not engine.rootObjects():
+    llm_engine.stop()
+    llm_engine.quit()
+    llm_engine.wait()
+    
     sys.exit(-1)
 
 sys.exit(app.exec())
