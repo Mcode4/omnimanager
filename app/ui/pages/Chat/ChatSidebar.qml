@@ -51,7 +51,7 @@ ColumnLayout {
 
     function loadMessages(id) {
         let messages = backend.getMessages(id)
-        // console.log("MESSAGES RETURNED:", messages)
+        console.log("MESSAGES RETURNED:", messages)
     }
 
     Connections {

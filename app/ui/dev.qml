@@ -96,11 +96,10 @@ Item {
             source: {
                 switch (currentPage) {
                     case 0: return "pages/Chat/ChatPage.qml"
-                    case 1: return "pages/Files/FilesPage.qml"
+                    case 1: return "pages/Notes/NotesPage.qml"
                     case 2: return "pages/Database/DatabasePage.qml"
-                    case 3: return "pages/Notes/NotesPage.qml"
+                    case 3: return "pages/Logs/LogsPage.qml"
                     case 4: return "pages/Settings/SettingsPage.qml"
-                    case 5: return "pages/Logs/LogsPage.qml"
                 }
             }
         }
