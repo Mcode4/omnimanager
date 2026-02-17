@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+// import QtQuick.Markdown 2.0
 
 ColumnLayout {
     anchors.fill: parent
@@ -23,12 +24,23 @@ ColumnLayout {
             Layout.fillHeight: true
             Layout.fillWidth: true
             model: messageModel
+            onCountChanged: messageList.positionViewAtEnd()
 
             delegate: Text {
                 width: messageList.width
                 wrapMode: Text.Wrap
-                text: model.role + ": " + model.content
-                color: model.role === "user" ? "#00ffcc" : "#ffffff"
+                textFormat: Text.MarkdownText
+
+                text: "**" + role + ":** " + content
+
+                font.family: "Segoe UI, Noto Color Emoji, Arial"
+                font.pixelSize: 14
+
+                Component.onCompleted: {
+                    console.log("ROLE:", role)
+                    console.log("CONTENT:", content)
+                    console.log("TYPE:", typeof content)
+                }
 
                 // TextArea {
                 //     id: chatLog
@@ -56,7 +68,7 @@ ColumnLayout {
         color: "lightgreen"
     }
 
-    Item { Layout.fillHeight: true }
+    // Item { Layout.fillHeight: true }
 
     // Input Row
     RowLayout {
@@ -93,6 +105,7 @@ ColumnLayout {
         chatId = id
         messageModel.clear()
         let messages = backend.getMessages(chatId)
+        console.log("MESSAGES RETURNED:", messages)
 
         for(let i=0; i<messages.length; i++) {
             messageModel.append({
@@ -130,25 +143,34 @@ ColumnLayout {
             let current = messageModel.get(streamingIndex)
             
             messageModel.set(streamingIndex, {
-                role: "Omni: ",
+                role: "Omni",
                 content: current.content + token
             })
         }
 
         function onAiResults(result) {
-            console.log('RESULT', result)
-            isThinking = false
-            isProcessing = false
-            streamingIndex = -1
+           console.log("RESULT:", result)
 
-            if(!result.success) {
+           isThinking = false
+           isProcessing = false
+
+           if(result.success) {
+            if(streamingIndex === -1) {
                 messageModel.append({
                     role: "Omni",
-                    content: "Error: " + result.error
+                    content: result.text
                 })
             } 
 
-            chatId = result.chat_id
+            if (result.chat_id && result.chat_id !== chatId)  {
+                chatId = result.chat_id
+            }
+           } else {
+            messageModel.append({
+                role: "Omni",
+                content: "Error: " + result.error
+            })
+           }
         }
     }
 }

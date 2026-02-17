@@ -17,7 +17,7 @@ Button {
 
     background: Rectangle {
         anchors.fill: parent
-        color: root.checked ? '#c0c0c0' : "transparent"
+        color: root.checked ? '#333' : "transparent"
         radius: 10
     }
 

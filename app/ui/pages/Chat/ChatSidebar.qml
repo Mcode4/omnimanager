@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 
+
 ColumnLayout {
     id: root
     signal chatSelected(int chat_id)
@@ -9,14 +10,16 @@ ColumnLayout {
     ListModel { id: chatModel }
 
     ListView {
+        id: chatList
+        currentIndex: -1
         Layout.fillWidth: true
         Layout.fillHeight: true
         model: chatModel
 
         delegate: Rectangle {
-            width: parent.width
+            width: chatList.width
             height: 50
-            color: ListView.isCurrentItem ? "#333" : "#222"
+            color: chatList.currentIndex === index ? "#333" : "#222"
 
             Text {
                 anchors.centerIn: parent
@@ -28,7 +31,7 @@ ColumnLayout {
             MouseArea {
                 anchors.fill: parent
                 onClicked: {
-                    console.log("CLICKED:", model.id)
+                    chatList.currentIndex = index
                     root.chatSelected(model.id)
                 }
             }
@@ -41,6 +44,14 @@ ColumnLayout {
 
         for(let i=0; i<chats.length; i++) {
             chatModel.append(chats[i])
+        }
+    }
+
+    Connections {
+        target: backend
+
+        function onNewChatCreated() {
+            loadChats()
         }
     }
 

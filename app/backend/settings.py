@@ -32,7 +32,9 @@ class Settings(QObject):
             },
             "generate_settings": {
                 "streamer": True,
-                "stream_when": "both"
+                "stream_when": "both",
+                "use_md": True,
+                "use_emojis": False,
                 # "stream_when": "thinking, instruct, or both"
             },
             "embedding_settings": {

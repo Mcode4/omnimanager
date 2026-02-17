@@ -7,7 +7,10 @@ ApplicationWindow {
     visible: true
     width: 1000
     height: 600
+
     title: "OmniManager"
+    font.family: "Segoe UI, Noto Color Emoji, Arial"
+    font.pixelSize:  14
 
     property int currentPage: 0
     property bool sidebarVisible: true
@@ -19,7 +22,7 @@ ApplicationWindow {
         Rectangle {
             id: sidebar
             width: 60
-            color: '#c0c0c0'
+            color: "#222"
             Layout.fillHeight: true
 
             Column {
@@ -57,7 +60,7 @@ ApplicationWindow {
         Rectangle {
             id: sidebarContext
             width: sidebarVisible ? 220 : 0
-            color: "#c0c0c0"
+            color: "#222"
             Layout.fillHeight: true
 
             Behavior on width {
@@ -78,18 +81,17 @@ ApplicationWindow {
                     }
                 }
                 onLoaded: {
-                    console.log("MAIN TEST 1: IS ITEM?")
-                    if (item){
-                        console.log("MAIN TEST 1 TRUE\nMAIN TEST 2: FUNCTION LOAD?")
+                    if (!item) return
+
+                    if (item.chatSelected) {
                         item.chatSelected.connect(function(id) {
-                            console.log("MAIN TEST 2 TRUE\nMAIN TEST 3: MAIN LOADER ITEMS?")
-                            if(mainLoader.item && mainLoader.item.loadMessages) {
-                                console.log('MAIN TEST 3 TRUE.. ATTEMPT TO LOAD MESSAGES')
+                            if (!mainLoader.item) return
+                            if (mainLoader.item.loadMessages)
                                 mainLoader.item.loadMessages(id)
-                            }
                         })
                     }
                 }
+
             }
         }
 

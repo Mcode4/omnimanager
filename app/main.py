@@ -57,6 +57,8 @@ chat_service = ChatService(system_db, db, orchestrator)
 engine = QQmlApplicationEngine()
 
 bridge = BackendBridge(current_tasks, settings, chat_service)
+app.aboutToQuit.connect(bridge.shutdown)
+
 engine.rootContext().setContextProperty("backend", bridge)
 engine.rootContext().setContextProperty("settings", settings)
 
@@ -64,11 +66,8 @@ qml_file = os.path.join(os.path.dirname(__file__), "ui", "main.qml")
 engine.load(qml_file)
 
 
+
 if not engine.rootObjects():
-    llm_engine.stop()
-    llm_engine.quit()
-    llm_engine.wait()
-    
     sys.exit(-1)
 
 sys.exit(app.exec())

@@ -1,9 +1,13 @@
 system:
   device: auto
 
+  # databases:
+  #   system: ~/.local/share/omnimanager/system.db
+  #   user:   ~/.local/share/omnimanager/user.db
+
 databases:
-  system: ~/.local/share/omnimanager/system.db
-  user:   ~/.local/share/omnimanager/user.db
+  system: app/backend/system.db
+  user:   app/backend/omnimanager/user.db
 
 models:
   - name: instruct

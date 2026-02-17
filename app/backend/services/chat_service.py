@@ -22,10 +22,12 @@ class ChatService(QObject):
     def send_message(self, chat_id, prompt):
         if not chat_id or chat_id == 0:
             chat_id = self.system_db.create_chat(prompt[:40])
+
+        history = self.system_db.get_messages_by_chat(chat_id)
         
         if chat_id not in self.chat_cache:
-            history = self.system_db.get_messages_by_chat(chat_id)
             self.chat_cache[chat_id] = history
+            
 
         user_msg_id = self.system_db.create_message(chat_id, "user", prompt)
         user_msg = self.system_db.get_message_by_id(user_msg_id)
