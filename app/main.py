@@ -155,7 +155,6 @@ def create_backend():
     bridge = BackendBridge(current_tasks, settings, chat_service)
 
     engine.rootContext().setContextProperty("backend", bridge)
-    engine.rootContext().setContextProperty("settings", settings)
 
     if DEV_MODE and hasattr(root, "reloadMain"):
         root.reloadMain()
@@ -247,7 +246,6 @@ if DEV_MODE:
 
         # Update QML context to point to new objects
         engine.rootContext().setContextProperty("backend", bridge)
-        engine.rootContext().setContextProperty("settings", settings)
 
         # Reload QML so it reconnects to new backend
         reload_qml()

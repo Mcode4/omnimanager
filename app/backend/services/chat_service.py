@@ -86,9 +86,10 @@ class ChatService(QObject):
                 self.orchestrator.llm.generate(
                     model_name="instruct",
                     messages=messages,
-                    system_prompt="""
+                    system_prompt=f"""
                         Summarize this conversation clearly and concisely.
                         Preserve key decisions, facts, and context.
+                        Under {self.orchestrator.llm.compute_budget()["system"]} tokens.
                     """,
                     source="summary"
                 )
@@ -111,7 +112,7 @@ class ChatService(QObject):
                     importance=2
                 )
             else:
-                print(f"Summary failed: {summarize["error"]}")
+                print(f"Summary failed: {results["error"]}")
 
         threading.Thread(target=worker, daemon=True).start()
         self.orchestrator.llm.summarySignal.connect(on_summary_results)
@@ -146,5 +147,9 @@ class ChatService(QObject):
             self.messageFinished.emit({
                 "success": True,
                 "chat_id": chat_id,
-                "text": text
+                "text": text,
+                "prompt_tokens": results["prompt_tokens"],
+                "completion_tokens": results["completion_tokens"],
+                "total_tokens": results["total_tokens"],
+                "use_stream": results["use_stream"]
             })

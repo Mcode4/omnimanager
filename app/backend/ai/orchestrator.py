@@ -159,6 +159,7 @@ class Orchestrator:
             {context}
 
             Provide a clear structured answer in under {self.settings.get_settings()["model_settings"]["instruct"].get("max_tokens", 512)} tokens.
+            Do not hallucinate
             """
             print("\n--- FINAL PROMPT ---\n")
             print(final_prompt)
@@ -168,7 +169,7 @@ class Orchestrator:
                 model_name="instruct",
                 messages=[
                     {"role": "system", "content": final_prompt},
-                    {"role": "user", "content": messages[-1]["content"]},
+                    {"role": "user", "content": messages[0]["content"]},
                 ],
                 system_prompt=self._final_system_prompt,
                 source=source

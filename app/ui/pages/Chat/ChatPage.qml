@@ -142,18 +142,14 @@ ColumnLayout {
         function onAiResults(result) {
             isThinking = false
             isProcessing = false
-                if(result.use_stream) return
-
+            if(result.use_stream) return
             
-
             if(result.success) {
-                // console.log("RESULTS APPENDING, INDEX:", streamingIndex)
-                if(streamingIndex === -1) {
-                    messageModel.append({
+                console.log("RESULTS ON FINISHED, USE STREAM:", result.use_stream)
+                messageModel.append({
                         role: "Omni",
                         content: result.text
                     })
-                } 
             } else {
                 messageModel.append({
                     role: "Omni",

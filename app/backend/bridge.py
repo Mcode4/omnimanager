@@ -154,12 +154,7 @@ class BackendBridge(QObject):
         self.current_tasks["ai"] -= 1
         print(f"\n\nPrompt Complete: {results}")
         
-        self.aiResults.emit({
-            "chat_id": int(results.get("chat_id")) if results["success"] else "",
-            "success": bool(results["success"]),
-            "text": str(results.get("text", "")),
-            "error": str(results.get("error", ""))
-        })
+        self.aiResults.emit(results)
         self._try_process_next_ai()
 
     # ============================================================
