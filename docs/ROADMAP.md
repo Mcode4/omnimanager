@@ -12,14 +12,15 @@ Goal: A clear, usable, local-first AI chat UI and note manager
 Planned:
 - Core AI assistant - chat and thinking
 - Persistent memory
+- Usuable chat page
 - Embeddings for memory context
 - Function databases for application settings and user/ai memory
-- Usuable chats, notes, and settings page
 - AI can reference notes
-- Logs and settings page
+
 
 Out of scope:
 - Voice input
+- Notes, logs, and settings page
 - Plugins/extensions
 - Cross-desktop support
 - Cloud services
@@ -35,6 +36,7 @@ Considerations:
 Goal: Add vision and tool logic to notes and LLM workflow
 
 Planned
+- MD-base note taker
 - Adding vision model logic to the notes page
 - Giving the llms identity, thinking with purpose
 - Defining tools available to the llm
