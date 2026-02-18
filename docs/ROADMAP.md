@@ -11,9 +11,12 @@ Goal: A clear, usable, local-first AI chat UI and note manager
 
 Planned:
 - Core AI assistant - chat and thinking
+- Persistent memory
 - Embeddings for memory context
 - Function databases for application settings and user/ai memory
-- Usuable chats, notes, database, logs, and settings page
+- Usuable chats, notes, and settings page
+- AI can reference notes
+- Logs and settings page
 
 Out of scope:
 - Voice input
