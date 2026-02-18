@@ -16,6 +16,7 @@ Planned:
 - Embeddings for memory context
 - Function databases for application settings and user/ai memory
 - AI can reference notes
+- AI core identity
 
 
 Out of scope:
