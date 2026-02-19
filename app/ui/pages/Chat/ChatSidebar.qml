@@ -31,11 +31,9 @@ ColumnLayout {
                         title: "New Chat"
                     })
                     Qt.callLater(function() {
-                        chatList.positionViewAtIndex(-1, ListView.Beginning)
-                        currentIndex = 0
-                        root.currentId = -1
-                        root.chatSelected(-1)
+                        focusToCurrentChat()
                     })
+                    currentId = -1
                 }
             }
 
@@ -105,6 +103,9 @@ ColumnLayout {
                     text: "✕"
                     Layout.preferredWidth: 30
                     onClicked: {
+                        if(currentId === -1) currentId = 0
+                        console.log("INDEX DELETING", index)
+                        if(index === 0) Qt.callLater(()=> focusToCurrentChat())
                         let chat = chatModel.get(index)
                         console.log("CHAT", chat)
                         backend.remove_chat(chat.id)
@@ -126,13 +127,17 @@ ColumnLayout {
         }
 
         Qt.callLater(function() {
-            chatList.currentIndex = 0
-            chatList.positionViewAtIndex(0, ListView.Beginning)
-
-            let firstChat = chatModel.get(0)
-            root.currentId = firstChat.id
-            root.chatSelected(firstChat.id)
+            focusToCurrentChat()
         })
+    }
+
+    function focusToCurrentChat() {
+        chatList.currentIndex = 0
+        chatList.positionViewAtIndex(0, ListView.Beginning)
+
+        let firstChat = chatModel.get(0)
+        root.currentId = firstChat.id
+        root.chatSelected(firstChat.id)
     }
 
     function loadMessages(id) {

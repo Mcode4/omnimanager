@@ -1,4 +1,4 @@
-# OmniManager Roadmap (Current Version: v0.1)
+# OmniManager Roadmap (Current Version: v0.2)
 
 This document outlines the planned direction for OmniManager.
 It is a living document and may change as the project evolves.
