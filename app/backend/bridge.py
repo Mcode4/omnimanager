@@ -23,7 +23,7 @@ class SystemWorker(QObject):
 
 class AIWorker(QObject):
     started = Signal()
-    tokenGenerated = Signal(str, str)
+    tokenGenerated = Signal(str, str, int)
     finished = Signal(dict)
 
     def __init__(self, chat_service: ChatService):
@@ -46,11 +46,14 @@ class BackendBridge(QObject):
 
     aiSignal = Signal(tuple)
     aiStarted = Signal()
-    aiToken = Signal(str, str) # Streaming Listener
+    aiToken = Signal(str, str, int) # Streaming Listener
     aiResults = Signal(dict)
 
     newChatCreated = Signal()
     messagesLoaded = Signal(list)
+    modelThinking = Signal(int)
+    modelTooling = Signal(int)
+    phaseState = Signal(dict)
 
     def __init__(self, current_tasks, settings: Settings, chat_service: ChatService):
         super().__init__()
@@ -86,6 +89,8 @@ class BackendBridge(QObject):
 
         chat_service.messageFinished.connect(self._on_ai_finished)
         chat_service.chatCreated.connect(self.newChatCreated)
+        chat_service.thinkingBridge.connect(self.modelThinking)
+        chat_service.toolingBridge.connect(self.modelTooling)
 
         # ================== START THREADS ==================
         self.system_thread.start()
@@ -107,6 +112,8 @@ class BackendBridge(QObject):
         self.system_thread.deleteLater()
         self.ai_thread = None
         self.system_thread = None
+
+        self.phase_state = {}
 
 
     # ============================================================
@@ -176,6 +183,3 @@ class BackendBridge(QObject):
     def remove_chat(self, chat_id):
         removed_chat = self.chat_service.system_db.delete_chat(chat_id)
         print(f"\n\n\nREMOVED CHAT: {removed_chat} CHAT ID: {chat_id}\n\n\n")
-
-    
-

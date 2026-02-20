@@ -28,6 +28,7 @@ from backend.ai.orchestrator import Orchestrator
 from backend.services.chat_service import ChatService
 from backend.system.device_manager import DeviceManager
 from backend.ai.vision_manager import VisionManager
+from state.chat_state import ChatState
 
 # ============================================================
 # ARG PARSER
@@ -87,6 +88,7 @@ rag_pipeline = None
 orchestrator = None
 chat_service = None
 bridge = None
+chat_state = None
 
 
 # Load DevRoot first (holds the Loader)
@@ -109,7 +111,7 @@ def create_backend():
     global system_db, db
     global vision_manager, model_manager, settings
     global llm_engine, embedding_engine, rag_pipeline
-    global orchestrator, chat_service, bridge
+    global orchestrator, chat_service, bridge, chat_state
 
     print("🚀 Creating backend...")
 
@@ -136,15 +138,13 @@ def create_backend():
     )
 
     rag_pipeline = RAGPipeline(db, embedding_engine, settings)
-    llm_engine = LLMEngine(model_manager, settings, orchestrator)
+    llm_engine = LLMEngine(model_manager, settings)
 
     orchestrator = Orchestrator(
         llm_engine, rag_pipeline, settings, system_db, user_db=db, chat_service=chat_service
     )
     
-
-    
-
+    chat_state = ChatState()
     chat_service = ChatService(system_db, db, orchestrator)
 
     
@@ -159,6 +159,7 @@ def create_backend():
     bridge = BackendBridge(current_tasks, settings, chat_service)
 
     engine.rootContext().setContextProperty("backend", bridge)
+    engine.rootContext().setContextProperty("ChatState", chat_state)
 
     if DEV_MODE and hasattr(root, "reloadMain"):
         root.reloadMain()
@@ -170,7 +171,6 @@ def create_backend():
 # INITIAL BACKEND
 # ============================================================
 create_backend()
-app.aboutToQuit.connect(lambda: bridge.shutdown())
 
 
 # ============================================================

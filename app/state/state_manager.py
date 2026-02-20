@@ -1,0 +1,1 @@
+# Manager State as it grows

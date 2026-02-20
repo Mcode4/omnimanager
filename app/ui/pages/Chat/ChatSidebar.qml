@@ -119,10 +119,11 @@ ColumnLayout {
     function loadChats(check) {
         if (!check) return
         chatModel.clear()
-        let chats = backend.getChats()
 
+        let chats = backend.getChats()
         for(let i=0; i<chats.length; i++) {
             console.log("CHATS APPENDING", chats[i])
+            console.log("APPENDING CHATS")
             chatModel.append(chats[i])
         }
 
@@ -137,7 +138,9 @@ ColumnLayout {
 
         let firstChat = chatModel.get(0)
         root.currentId = firstChat.id
+        console.log("FOCUSED ID: ", firstChat.id)
         root.chatSelected(firstChat.id)
+        
     }
 
     function loadMessages(id) {

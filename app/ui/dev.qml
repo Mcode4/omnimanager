@@ -4,11 +4,12 @@ import QtQuick.Layouts
 import "components"
 
 Item {
-    id: devRoot
+    id: root
     anchors.fill: parent
 
     property int currentPage: 0
     property bool sidebarVisible: true
+    property int initialIndex: -1
 
     RowLayout {
         anchors.fill: parent
@@ -74,13 +75,17 @@ Item {
                     }
                 }
                 onLoaded: {
-                    if(!item) return
+                    if (!item) return
 
                     if (currentPage === 0 && item.chatSelected) {
                         item.chatSelected.connect(function(chat_id) {
-                            if(mainLoader.item && mainLoader.item.loadMessages) {
-                                mainLoader.item.loadMessages(chat_id)
-                            }
+                            Qt.callLater(function() {
+                                root.initialIndex = chat_id
+
+                                if (mainLoader.item && mainLoader.item.loadMessages) {
+                                    mainLoader.item.loadMessages(chat_id)
+                                }
+                            })
                         })
                     }
                 }
@@ -101,6 +106,13 @@ Item {
                     case 3: return "pages/Logs/LogsPage.qml"
                     case 4: return "pages/Settings/SettingsPage.qml"
                 }
+            }
+            onLoaded: {
+                // if(!item) return
+                
+                // if(item.loadMessages && item.loadMessages.id) {
+                //     item.loadMessages.id = root.initialIndex
+                // }
             }
         }
     }

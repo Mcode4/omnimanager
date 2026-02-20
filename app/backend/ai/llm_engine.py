@@ -5,21 +5,31 @@ from backend.tools.tool_registry import get_available_tools
 
 
 class LLMEngine(QObject):
-    token_generated = Signal(str, str)
-    generation_finished = Signal(str, dict)
-    toolSignal = Signal(int, dict)
+    tokenGenerated = Signal(str, str, int)
+    modelThinking = Signal(int)
+    modelTooling = Signal(int)
 
-    def __init__(self, model_manager: ModelManager, settings: Settings, chat_id = None):
+    titleSignal = Signal(dict, int)
+    generationFinished = Signal(str, dict, dict)
+    toolSignal = Signal(int, list)
+
+    def __init__(self, model_manager: ModelManager, settings: Settings):
         super().__init__()
         self.model_manager = model_manager
         self.settings = settings
 
-    def generate(self, model_name: str, messages: list, system_prompt: str, source: str, phase="instruct", chat_id = None):
+    def generate(self, model_name: str, messages: list, system_prompt: str, chat_id: int,  source: str, phase="instruct", past_transfer = None, tool_choice="auto"):
+        # Label Signals
+        if source == "tool": self.modelTooling.emit(chat_id)
+        elif phase == "thinking": self.modelThinking.emit(chat_id)
+
+        # Model Configurations
         model = self.model_manager.get_model(model_name)
         model_settings = self.settings.get_settings()["model_settings"][model_name]
         generate_settings = self.settings.get_settings()["generate_settings"]
         use_stream = generate_settings.get("streamer", True)
 
+        # Prompt Trimming
         if system_prompt:
             messages = [{"role": "system", "content": system_prompt}] + messages
 
@@ -29,9 +39,10 @@ class LLMEngine(QObject):
             max_tokens = model_settings.get("max_tokens", 512)
         )
 
+        # No Model Error Handling
         if not model:
             if source == "chat":
-                self.generation_finished.emit(phase, {
+                self.generationFinished.emit(phase, {
                     "success": False, 
                     "error": "Model not loaded"
                 })
@@ -41,7 +52,7 @@ class LLMEngine(QObject):
                     "error": "Model not loaded"
                 })
             elif source == "summary":
-                self.summarySignal.emit({
+                self.generationFinished.emit({
                     "success": False, 
                     "error": "Model not loaded"
                 })
@@ -50,9 +61,10 @@ class LLMEngine(QObject):
             return
         
         try:
-            model.reset()
-            # self.model_manager.reload_model(model_name, n_ctx=max_context)
-            if use_stream and source == "chat":
+            model.reset() # Model Reset For Multiple Prompts
+            
+            # Streaming Prompt. Exclused Non-Chat Prompts
+            if use_stream and source in ("chat", "tool"):
                 full_response = ""
                 tool_calls_buffer = {}
 
@@ -67,13 +79,16 @@ class LLMEngine(QObject):
                     mirostat_mode=model_settings.get("mirostat_mode", 0),
                     stream=True,
                     tools=get_available_tools(),
-                    tool_choice="auto"
+                    tool_choice=tool_choice
                 ):
-                    delta = chunk["choices"][0]["delta"]
+                    delta = chunk["choices"][0]["delta"] # Streaming Chunk
+
+                    # Chunk Deciphering
                     if "content" in delta:
                         token = delta["content"]
                         full_response += token
-                        self.token_generated.emit(phase, token)
+                        self.tokenGenerated.emit(phase, token, chat_id)
+
                     if "tool_calls" in delta:
                         for tool_delta in delta["tool_calls"]:
                             index = tool_delta["index"]
@@ -91,13 +106,16 @@ class LLMEngine(QObject):
                                 if "name" in fn:
                                     tool_calls_buffer[index]["function"]["name"] = fn["name"]
                                 if "arguments" in fn:
-                                    tool_calls_buffer[index]["function"]["agruments"] += fn["arguments"]
-                    
+                                    tool_calls_buffer[index]["function"]["arguments"] += fn["arguments"]
+
+                # After Deciphering Chunks. If Tool Call 
                 if tool_calls_buffer:
                     tool_calls = list(tool_calls_buffer.values())
                     print("\n\n\n\n\nTOOL CALLED: ", tool_calls, "\n\n\n\n\n")
                     self.toolSignal.emit(chat_id, tool_calls)
+                    return
             else:
+                # No Stream. Normal Prompts
                 output = model.create_chat_completion(
                     messages=messages,
                     max_tokens=model_settings.get("max_tokens", 512),
@@ -109,14 +127,16 @@ class LLMEngine(QObject):
                     mirostat_mode=model_settings.get("mirostat_mode", 0),
                     stream=False,
                     tools=get_available_tools(),
-                    tool_choice="auto"
+                    tool_choice=tool_choice
                 )
                 
                 message = output["choices"][0]["message"]
+                # If Tool Call
                 if "tool_calls" in message:
                     tool_calls = message["tool_calls"]
                     print("\n\n\n\n\nTOOL CALLED: ", tool_calls, "\n\n\n\n\n")
                     self.toolSignal.emit(chat_id, tool_calls)
+                    return
 
                 full_response = message["content"]
 
@@ -138,14 +158,24 @@ class LLMEngine(QObject):
                 "success": False,
                 "error": str(e)
             }
+        transfer = {
+            "chat_id": chat_id,
+            "phase": phase,
+            "source": source,
+            "messages": messages
+        }
+        if past_transfer:
+            transfer = past_transfer
+
+        # Result Designations
         if source == "chat":
-            self.generation_finished.emit(phase, results)
+            self.generationFinished.emit(phase, results, transfer)
         elif source == "title":
-            self.titleSignal.emit(results)
+            self.titleSignal.emit(results, chat_id)
         elif source == "summary":
-            self.generation_finished.emit(source, results)
+            self.generationFinished.emit(source, results, transfer)
         elif source == "tool":
-            self.generation_finished.emit(source, results)
+            self.generationFinished.emit(source, results, transfer)
         else:
             print("UNKNOWN SOURCE: ", source)
         
@@ -173,7 +203,7 @@ class LLMEngine(QObject):
             trimmed.insert(0, msg)
             total += tokens
 
-        print("TRIMMED", trimmed)
+        # print("TRIMMED", trimmed)
         return trimmed
     
     def compute_budget(self, model_name):

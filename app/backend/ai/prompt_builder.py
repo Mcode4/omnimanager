@@ -50,15 +50,23 @@ class PromptBuilder:
     # ============================================================
     #                    CHAT HISTORY
     # ============================================================
-    def add_chat_history(self, messages: list):
+    def add_chat_history(self, messages: list, no_reverse = False):
         token_used = 0
         trimmed = []
-        for m in reversed(messages):
-            tokens = self.llm.estimate_tokens(m["content"])
-            if token_used + tokens > self.budget["chat"]:
-                break
-            trimmed.insert(0, m)
-            token_used += tokens
+        if no_reverse:
+            for m in messages:
+                tokens = self.llm.estimate_tokens(m["content"])
+                if token_used + tokens > self.budget["chat"]:
+                    break
+                trimmed.insert(0, m)
+                token_used += tokens
+        else:
+            for m in reversed(messages):
+                tokens = self.llm.estimate_tokens(m["content"])
+                if token_used + tokens > self.budget["chat"]:
+                    break
+                trimmed.insert(0, m)
+                token_used += tokens
 
         self._chat_messages = trimmed
 

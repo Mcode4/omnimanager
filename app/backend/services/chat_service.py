@@ -1,13 +1,15 @@
 from PySide6.QtCore import Signal, QObject
-import threading
 from backend.databases.system_db import SystemDatabase
 from backend.databases.user_db import UserDatabase
 from backend.ai.orchestrator import Orchestrator
 
 class ChatService(QObject):
-    tokenGenerated = Signal(str, str)
+    tokenGenerated = Signal(str, str, int)
     messageFinished = Signal(dict)
     chatCreated = Signal()
+
+    thinkingBridge = Signal(int)
+    toolingBridge = Signal(int)
 
     def __init__(self, system_db: SystemDatabase, user_db: UserDatabase, orchestrator: Orchestrator):
         super().__init__()
@@ -15,65 +17,77 @@ class ChatService(QObject):
         self.user_db = user_db
         self.orchestrator = orchestrator
         self.chat_cache = {}
-        self._current_chat_id = None
 
-        self.orchestrator.llm.token_generated.connect(self._handle_token)
-        self.orchestrator.llm.generation_finished.connect(self._handle_finished)
+        self.orchestrator.llm.tokenGenerated.connect(self._handle_token)
+        self.orchestrator.llm.generationFinished.connect(self._handle_finished)
+        self.orchestrator.llm.modelThinking.connect(self.thinkingBridge)
+        self.orchestrator.llm.modelTooling.connect(self.toolingBridge)
+
+        self.orchestrator.summaryCommit.connect(self._add_summary)
 
     # ============================================================
     #                    PROMPT HANDLING
     # ============================================================
     def send_message(self, chat_id, prompt):
-        if not chat_id or chat_id == 0:
+        if not chat_id or chat_id <= 0:
             chat_id = self.system_db.create_chat(prompt[:25])
             self.chatCreated.emit()
 
         user_msg_id = self.system_db.create_message(chat_id, "user", prompt)
         user_msg = self.system_db.get_message_by_id(user_msg_id)
 
-        if chat_id not in self.chat_cache:
-            history = self.system_db.get_messages_by_chat(chat_id)
+        print("PREVIOUS CACHE:", self.chat_cache.get(chat_id, {}))
+        history = self.system_db.get_messages_by_chat(chat_id)
+        if chat_id in self.chat_cache:
+            self.chat_cache[chat_id].append(user_msg)
+        else:
             self.chat_cache[chat_id] = list(history)
-
-        self.chat_cache[chat_id].append(user_msg)
-        self._current_chat_id = chat_id
 
         print("SEND MESSAGE IMPORTANCES: ", {
             "chat_cache": self.chat_cache,
             "chat_id": chat_id,
-            "_current_chat_id": self._current_chat_id,
             "history": history
         })
 
         self.orchestrator.run(prompt, self.chat_cache[chat_id], chat_id=chat_id)
 
     # ============================================================
+    #                    CACHING
+    # ============================================================
+    def get_messages(self, chat_id: int):
+        if not chat_id:
+            print("no chat_id")
+        return self.chat_cache[chat_id]
+
+    def append_message(self, chat_id: int, message: dict):
+        if message:
+            if not chat_id:
+                print("no chat_id")
+            else:
+                self.system_db.create_message(chat_id, message["role"], message["content"])
+                self.chat_cache[chat_id].append(message)
+        return self.chat_cache[chat_id]
+
+    # ============================================================
     #                    ASSISTING CHAT WITH AI
     # ============================================================
-    def _generate_title_async(self, messages, chat_id):
-        def worker():
-            system_prompt="""
-                In 5-20 words, create a summary of the chat so for.
-                Add emoji(s) to the front of summary that best fit summary 
-            """
-            self.orchestrator.llm.generate(
-                model_name="instruct",
-                messages=messages,
-                system_prompt=system_prompt,
-                source="title"
-            )
-            self.orchestrator.llm.titleSignal.connect(on_title_results)
-        def on_title_results(results):
-            if results["success"]:
-                self.system_db.edit_chat_title(results["text"], chat_id)
-            else:
-                print(f"Failed to generate title: {results["error"]}")
-        
-        threading.Thread(target=worker, daemon=True).start()
+    def _generate_title(self, messages, chat_id):
+        system_prompt="""
+            In 5-20 words, create a summary of the chat so for.
+            Add emoji(s) to the front of summary that best fit summary 
+        """
+        self.orchestrator.llm.generate(
+            chat_id=chat_id,
+            model_name="instruct",
+            messages=messages,
+            system_prompt=system_prompt,
+            source="title"
+        )
 
-    def _maybe_summarize(self, messages: list):
+    def _maybe_summarize(self, messages: list, transfer):
         summary_settings = self.orchestrator.settings.get_settings()["summary_settings"]
         max_messages = summary_settings.get("max_message", 8)
+        keep_fresh = summary_settings.get("keep_fresh", 3)
         if(len(messages) < max_messages): return
         
         total_tokens = sum(
@@ -83,11 +97,11 @@ class ChatService(QObject):
         threshold = summary_settings.get("summary_token_threshold", 2500)
         if total_tokens < threshold:
             return
-        to_summarize = messages[:summary_settings.get("keep_fresh", 3)]
+        to_summarize = messages[:-keep_fresh]
 
-        return self._run_summary(to_summarize)
+        return self._run_summary(to_summarize, transfer)
 
-    def _run_summary(self, messages_to_summarize: list):
+    def _run_summary(self, messages_to_summarize: list, transfer):
         from backend.ai.prompt_builder import PromptBuilder
         builder = PromptBuilder(self.orchestrator.llm, "instruct")
         builder.set_system_instructions("""
@@ -100,32 +114,37 @@ class ChatService(QObject):
             user_message="Create a memory summary of the above converstion"
         )
         self.orchestrator.llm.generate(
+            chat_id=transfer["chat_id"],
             model_name="instruct",
             messages=final_messages,
             system_prompt="",
-            source="summary"
+            source="summary",
+            past_transfer=transfer,
         )
-        
+
+    def _add_summary(self, summary, transfer):
+        summary_settings = self.orchestrator.settings.get_settings()["summary_settings"]
+        keep_fresh = summary_settings.get("keep_fresh", 3)
+
+        chat_id = transfer["chat_id"]
+
+        summarized_cache = self.chat_cache[chat_id][-keep_fresh:]
+        summarized_cache.append(summary)
+        print(f"\n\n\nCHAT CACHE: {self.chat_cache}\n SUMMARIZED CACHE: {summarized_cache}\n\n\n")
+        self.chat_cache[chat_id] = summarized_cache
+        return
 
     # ============================================================
     #                    TOKEN HANDLING FOR STREAMING
     # ============================================================
-    def _handle_token(self, phase, token):
-        stream_when = self.orchestrator.settings.get_settings()["generate_settings"]["stream_when"]
-        stream_thinking = True if stream_when == "both" or stream_when == "thinking" else False
-        stream_instruct = True if stream_when == "both" or stream_when == "instruct" else False
+    def _handle_token(self, phase, token, chat_id):
+        print(f"STREAMING, TOKEN:{token}, CHAT ID:{chat_id}")
+        self.tokenGenerated.emit(phase, token, chat_id)
 
-        print("STREAMING IMPORTANCE", {
-            "phase": phase,
-            "token": token,
-            "stream_thinking": stream_thinking,
-            "streaming_instruct": stream_instruct
-        })
-        if (phase == "thinking" and stream_thinking) or (phase == "instruct" and stream_instruct):
-            print("EMITTING")
-            self.tokenGenerated.emit(phase, token)
-
-    def _handle_finished(self, phase, results):
+    # ============================================================
+    #                    EXTERNAL FINISHED PROMPTS
+    # ============================================================
+    def _handle_finished(self, phase, results, transfer):
         if not results["success"]:
             self.messageFinished.emit(results)
             return
@@ -133,13 +152,13 @@ class ChatService(QObject):
         if phase == "instruct" or phase == "tool":
             text = results["text"]
 
-            chat_id = self._current_chat_id
+            chat_id = transfer["chat_id"]
             sys_msg_id = self.system_db.create_message(chat_id, "assistant", text)
             sys_msg = self.system_db.get_message_by_id(sys_msg_id)
-            self._maybe_summarize(self.chat_cache[chat_id])
+            self._maybe_summarize(self.chat_cache[chat_id], transfer)
             self.chat_cache[chat_id].append(sys_msg)
-            if(len(self.chat_cache[chat_id]) == 2):
-                self._generate_title_async(self.chat_cache[chat_id], chat_id)
+            if(len(self.chat_cache[chat_id]) == 6):
+                self._generate_title(self.chat_cache[chat_id], chat_id)
         
             self.messageFinished.emit({
                 "success": True,
@@ -151,10 +170,4 @@ class ChatService(QObject):
                 "use_stream": results["use_stream"]
             })
 
-    def get_messages(self, chat_id: int = None, message: dict = None):
-        if message:
-            if not chat_id:
-                print("no chat_id")
-            else:
-                self.chat_cache[chat_id].append(message)
-        return self.chat_cache[chat_id]
+    
