@@ -3,8 +3,6 @@ import json
 from collections import deque
 from PySide6.QtCore import QObject, Slot, Signal, QThread
 from backend.command_router import CommandRouter
-from backend.settings import Settings
-from backend.services.chat_service import ChatService
 
 
 class SystemWorker(QObject):
@@ -26,17 +24,120 @@ class AIWorker(QObject):
     tokenGenerated = Signal(str, str, int)
     finished = Signal(dict)
 
-    def __init__(self, chat_service: ChatService):
-        super().__init__()
-        self.chat_service = chat_service
-        self.chat_service.tokenGenerated.connect(self.tokenGenerated)
+    chatCreated = Signal(int)
+    messagesLoaded = Signal(list)
 
+    def __init__(self, system_db, user_db, settings, model_manager, rag_pipeline):
+        super().__init__()
+        self.system_db = system_db
+        self.user_db = user_db
+        self.settings = settings
+        self.model_manager = model_manager
+        self.rag_pipeline = rag_pipeline
+
+        self.chat_service = None
+        self.orchestrator = None
+
+    @Slot()
+    def initialize(self):
+        from backend.ai.llm_engine import LLMEngine
+        from backend.ai.orchestrator import Orchestrator
+        from backend.services.chat_service import ChatService
+
+        llm = LLMEngine(self.model_manager, self.settings)
+        orchestrator = Orchestrator(
+            llm,
+            self.rag_pipeline,
+            self.settings,
+            self.user_db,
+            None
+        )
+        chat_service = ChatService(
+            self.system_db,
+            orchestrator
+        )
+
+        orchestrator.chat_service = chat_service
+        self.chat_service = chat_service
+        self.orchestrator = orchestrator
+
+        llm.tokenGenerated.connect(self.tokenGenerated)
+        llm.generationFinished.connect(self._handle_finished)
+        chat_service.chatCreated.connect(self.chatCreated)
+
+    # ============================================================
+    #                    AI PROMPTING/HANDLING
+    # ============================================================
     @Slot(tuple)
     def process(self, request):
         self.started.emit()
         chat_id, prompt = request
         # print(f'CHAT ID: {chat_id} PROMPT: {prompt}')
         self.chat_service.send_message(chat_id, prompt)
+
+    def _handle_finished(self, phase, results, transfer):
+        if not results["success"]:
+            self.finished.emit(results)
+            return
+        
+        # ================== INTERNAL FINISHED PROMPTS ==================
+        if phase == "summary":
+            summary_text = results["text"]
+            if summary_text and summary_text.strip():
+                self.chat_service.add_summary(summary_text, transfer)
+                embedding = self.rag_pipeline.embedding_engine.embed(summary_text)
+                self.user_db.add_memory_with_embedding(
+                    type="summary",
+                    category="conversation",
+                    content=summary_text,
+                    embedding=embedding,
+                    source="ai",
+                    importance=2,
+                    confidence=0.9
+                )
+            return
+        
+        elif phase == "thinking":
+            self.orchestrator.handle_thinking_prompt(results, transfer)
+            return
+        
+        # ================== EXTERNAL FINISHED PROMPTS ==================
+        elif phase in ("instruct", "tool"):
+            text = results["text"]
+            chat_id = transfer["chat_id"]
+
+            self.chat_service.cache_response(text, transfer)
+            self.finished.emit({
+                "success": True,
+                "chat_id": chat_id,
+                "text": text,
+                "prompt_tokens": results["prompt_tokens"],
+                "completion_tokens": results["completion_tokens"],
+                "total_tokens": results["total_tokens"],
+                "use_stream": results["use_stream"]
+            })
+            return 
+
+    # ============================================================
+    #                    CHAT DATA-SIGNAL HANDLING
+    # ============================================================
+    @Slot(result="QVariantList")
+    def getChats(self):
+        chats = self.chat_service.system_db.get_chats()
+        print("CHATS BEFORE BRIDGE: ", chats)
+        return chats if chats else []
+    
+    @Slot(int, result="QVariantList")
+    def getMessages(self, chat_id):
+        messages = self.chat_service.system_db.get_messages_by_chat(chat_id)
+        print("MESSAGES BRIDGE", messages, f"CHAT ID:", chat_id)
+        self.messagesLoaded.emit(messages if messages else [])
+
+    @Slot(int)
+    def remove_chat(self, chat_id):
+        removed_chat = self.chat_service.system_db.delete_chat(chat_id)
+        print(f"\n\n\nREMOVED CHAT: {removed_chat} CHAT ID: {chat_id}\n\n\n")
+
 
 
 class BackendBridge(QObject):
@@ -46,21 +147,25 @@ class BackendBridge(QObject):
 
     aiSignal = Signal(tuple)
     aiStarted = Signal()
-    aiToken = Signal(str, str, int) # Streaming Listener
+    aiTokens = Signal(str, str, int) # Streaming Listener
     aiResults = Signal(dict)
 
-    newChatCreated = Signal()
-    messagesLoaded = Signal(list)
     modelThinking = Signal(int)
     modelTooling = Signal(int)
     phaseState = Signal(dict)
 
-    def __init__(self, current_tasks, settings: Settings, chat_service: ChatService):
+    chatCreated = Signal(int)
+
+    def __init__(self, current_tasks, settings, system_db, user_db, model_manager, rag_pipeline):
         super().__init__()
         # ================== VARIABLES ==================
         self.current_tasks = current_tasks
         self.settings = settings
-        self.chat_service = chat_service
+        self.system_db = system_db
+        self.user_db = user_db
+        self.model_manager = model_manager
+        self.rag_pipeline = rag_pipeline
+        # self.chat_service = chat_service
 
         # ================== QTHREADS ==================
         self.system_thread = QThread()
@@ -68,7 +173,14 @@ class BackendBridge(QObject):
 
         # ================== WORKERS ==================
         self.system_worker = SystemWorker()
-        self.ai_worker = AIWorker(chat_service)
+
+        self.ai_worker = AIWorker(
+            self.system_db,
+            self.user_db,
+            self.settings,
+            self.model_manager,
+            self.rag_pipeline
+        )
 
         # ================== QUEUES ==================
         self.system_queue = deque()
@@ -76,7 +188,12 @@ class BackendBridge(QObject):
 
         # ================== WORKER CONNECTIONS ==================
         self.system_worker.moveToThread(self.system_thread)
+
         self.ai_worker.moveToThread(self.ai_thread)
+        self.rag_pipeline.moveToThread(self.ai_thread) #QObjects only moveToThread
+
+        # ================== THREAD CONNECTIONS ==================
+        self.ai_thread.started.connect(self.ai_worker.initialize)
 
         # ================== SIGNAL CONNECTIONS ==================
         self.systemSignal.connect(self.system_worker.process)
@@ -85,12 +202,15 @@ class BackendBridge(QObject):
 
         self.aiSignal.connect(self.ai_worker.process)
         self.ai_worker.started.connect(self.aiStarted)
-        self.ai_worker.tokenGenerated.connect(self.aiToken)
+        self.ai_worker.tokenGenerated.connect(self.aiTokens)
+        self.ai_worker.finished.connect(self._on_ai_finished)
 
-        chat_service.messageFinished.connect(self._on_ai_finished)
-        chat_service.chatCreated.connect(self.newChatCreated)
-        chat_service.thinkingBridge.connect(self.modelThinking)
-        chat_service.toolingBridge.connect(self.modelTooling)
+        # chat_service.messageFinished.connect(self._on_ai_finished)
+        # chat_service.chatCreated.connect(self.newChatCreated)
+        # chat_service.thinkingBridge.connect(self.modelThinking)
+        # chat_service.toolingBridge.connect(self.modelTooling)
+
+        self.ai_worker.chatCreated.connect(self.chatCreated)
 
         # ================== START THREADS ==================
         self.system_thread.start()
@@ -164,22 +284,5 @@ class BackendBridge(QObject):
         self.aiResults.emit(results)
         self._try_process_next_ai()
 
-    # ============================================================
-    #                    CHAT DATA-SIGNAL HANDLING
-    # ============================================================
-    @Slot(result="QVariantList")
-    def getChats(self):
-        chats = self.chat_service.system_db.get_chats()
-        print("CHATS BEFORE BRIDGE: ", chats)
-        return chats if chats else []
     
-    @Slot(int, result="QVariantList")
-    def getMessages(self, chat_id):
-        messages = self.chat_service.system_db.get_messages_by_chat(chat_id)
-        print("MESSAGES BRIDGE", messages, f"CHAT ID:", chat_id)
-        self.messagesLoaded.emit(messages if messages else [])
-
-    @Slot(int)
-    def remove_chat(self, chat_id):
-        removed_chat = self.chat_service.system_db.delete_chat(chat_id)
-        print(f"\n\n\nREMOVED CHAT: {removed_chat} CHAT ID: {chat_id}\n\n\n")
+    

@@ -33,11 +33,16 @@ class LLMEngine(QObject):
         if system_prompt:
             messages = [{"role": "system", "content": system_prompt}] + messages
 
-        messages = self.trim_messages_to_budget(
-            messages,
-            max_context = model_settings.get("max_context", 4096),
-            max_tokens = model_settings.get("max_tokens", 512)
-        )
+        messages = self.trim_messages_to_budget(messages, model_name)
+
+        transfer = {
+            "chat_id": chat_id,
+            "phase": phase,
+            "source": source,
+            "messages": messages
+        }
+        if past_transfer:
+            transfer = past_transfer
 
         # No Model Error Handling
         if not model:
@@ -45,17 +50,17 @@ class LLMEngine(QObject):
                 self.generationFinished.emit(phase, {
                     "success": False, 
                     "error": "Model not loaded"
-                })
+                }, transfer)
             elif source == "title":
                 self.titleSignal.emit({
                     "success": False, 
                     "error": "Model not loaded"
-                })
+                }, chat_id)
             elif source == "summary":
                 self.generationFinished.emit({
                     "success": False, 
                     "error": "Model not loaded"
-                })
+                }, transfer)
             else:
                 print("Model not loaded from unknown source: ", source)
             return
@@ -64,81 +69,26 @@ class LLMEngine(QObject):
             model.reset() # Model Reset For Multiple Prompts
             
             # Streaming Prompt. Exclused Non-Chat Prompts
-            if use_stream and source in ("chat", "tool"):
-                full_response = ""
-                tool_calls_buffer = {}
-
-                for chunk in model.create_chat_completion(
-                    messages=messages,
-                    max_tokens=model_settings.get("max_tokens", 512),
-                    temperature=model_settings.get("temperature", 0.1),
-                    top_k=model_settings.get("top_k", 50),
-                    top_p=model_settings.get("top_p", 0.1),
-                    min_p=model_settings.get("min_p", 0.2),
-                    repeat_penalty=model_settings.get("repetition_penalty", 1.05),
-                    mirostat_mode=model_settings.get("mirostat_mode", 0),
-                    stream=True,
-                    tools=get_available_tools(),
-                    tool_choice=tool_choice
-                ):
-                    delta = chunk["choices"][0]["delta"] # Streaming Chunk
-
-                    # Chunk Deciphering
-                    if "content" in delta:
-                        token = delta["content"]
-                        full_response += token
-                        self.tokenGenerated.emit(phase, token, chat_id)
-
-                    if "tool_calls" in delta:
-                        for tool_delta in delta["tool_calls"]:
-                            index = tool_delta["index"]
-
-                            if index not in tool_calls_buffer:
-                                tool_calls_buffer[index] = {
-                                    "id": tool_delta.get("id"),
-                                    "function": {
-                                        "name": "",
-                                        "arguments": ""
-                                    }
-                                }
-                            if "function" in tool_delta:
-                                fn = tool_delta["function"]
-                                if "name" in fn:
-                                    tool_calls_buffer[index]["function"]["name"] = fn["name"]
-                                if "arguments" in fn:
-                                    tool_calls_buffer[index]["function"]["arguments"] += fn["arguments"]
-
-                # After Deciphering Chunks. If Tool Call 
-                if tool_calls_buffer:
-                    tool_calls = list(tool_calls_buffer.values())
-                    print("\n\n\n\n\nTOOL CALLED: ", tool_calls, "\n\n\n\n\n")
-                    self.toolSignal.emit(chat_id, tool_calls)
-                    return
-            else:
-                # No Stream. Normal Prompts
-                output = model.create_chat_completion(
-                    messages=messages,
-                    max_tokens=model_settings.get("max_tokens", 512),
-                    temperature=model_settings.get("temperature", 0.1),
-                    top_k=model_settings.get("top_k", 50),
-                    top_p=model_settings.get("top_p", 0.1),
-                    min_p=model_settings.get("min_p", 0.2),
-                    repeat_penalty=model_settings.get("repetition_penalty", 1.05),
-                    mirostat_mode=model_settings.get("mirostat_mode", 0),
-                    stream=False,
-                    tools=get_available_tools(),
+            if use_stream and source in ("chat", "tool") and phase != "thinking":
+                full_response = self._streaming_generation(
+                    model=model, 
+                    model_settings=model_settings, 
+                    messages=messages, 
+                    phase=phase, 
+                    chat_id=chat_id, 
                     tool_choice=tool_choice
                 )
-                
-                message = output["choices"][0]["message"]
-                # If Tool Call
-                if "tool_calls" in message:
-                    tool_calls = message["tool_calls"]
-                    print("\n\n\n\n\nTOOL CALLED: ", tool_calls, "\n\n\n\n\n")
-                    self.toolSignal.emit(chat_id, tool_calls)
-                    return
+            else:
+                full_response = self._default_generation(
+                    model=model, 
+                    model_settings=model_settings, 
+                    messages=messages,  
+                    chat_id=chat_id, 
+                    tool_choice=tool_choice
+                )
 
-                full_response = message["content"]
+            if full_response is None:
+                return
 
             prompt_text = "".join(m["content"] for m in messages)
             prompt_tokens = self.estimate_tokens(prompt_text)
@@ -158,14 +108,6 @@ class LLMEngine(QObject):
                 "success": False,
                 "error": str(e)
             }
-        transfer = {
-            "chat_id": chat_id,
-            "phase": phase,
-            "source": source,
-            "messages": messages
-        }
-        if past_transfer:
-            transfer = past_transfer
 
         # Result Designations
         if source == "chat":
@@ -178,6 +120,87 @@ class LLMEngine(QObject):
             self.generationFinished.emit(source, results, transfer)
         else:
             print("UNKNOWN SOURCE: ", source)
+
+    # ============================================================
+    #                    LLM GENERATION FUNCTIONS
+    # ============================================================
+    def _streaming_generation(self, model, model_settings, messages, phase, chat_id, tool_choice):
+        full_response = ""
+        tool_calls_buffer = {}
+
+        for chunk in model.create_chat_completion(
+            messages=messages,
+            max_tokens=model_settings.get("max_tokens", 512),
+            temperature=model_settings.get("temperature", 0.1),
+            top_k=model_settings.get("top_k", 50),
+            top_p=model_settings.get("top_p", 0.1),
+            min_p=model_settings.get("min_p", 0.2),
+            repeat_penalty=model_settings.get("repetition_penalty", 1.05),
+            mirostat_mode=model_settings.get("mirostat_mode", 0),
+            stream=True,
+            tools=get_available_tools(),
+            tool_choice=tool_choice
+        ):
+            delta = chunk["choices"][0]["delta"] # Streaming Chunk
+
+            # Chunk Deciphering
+            if "content" in delta:
+                token = delta["content"]
+                full_response += token
+                self.tokenGenerated.emit(phase, token, chat_id)
+
+            if "tool_calls" in delta:
+                for tool_delta in delta["tool_calls"]:
+                    index = tool_delta["index"]
+
+                    if index not in tool_calls_buffer:
+                        tool_calls_buffer[index] = {
+                            "id": tool_delta.get("id"),
+                            "function": {
+                                "name": "",
+                                "arguments": ""
+                            }
+                        }
+                    if "function" in tool_delta:
+                        fn = tool_delta["function"]
+                        if "name" in fn:
+                            tool_calls_buffer[index]["function"]["name"] = fn["name"]
+                        if "arguments" in fn:
+                            tool_calls_buffer[index]["function"]["arguments"] += fn["arguments"]
+
+        # After Deciphering Chunks. If Tool Call 
+        if tool_calls_buffer:
+            tool_calls = list(tool_calls_buffer.values())
+            print("\n\n\n\n\nTOOL CALLED: ", tool_calls, "\n\n\n\n\n")
+            self.toolSignal.emit(chat_id, tool_calls)
+            return None
+        return full_response
+    
+    def _default_generation(self, model, model_settings, messages, chat_id, tool_choice):
+        output = model.create_chat_completion(
+            messages=messages,
+            max_tokens=model_settings.get("max_tokens", 512),
+            temperature=model_settings.get("temperature", 0.1),
+            top_k=model_settings.get("top_k", 50),
+            top_p=model_settings.get("top_p", 0.1),
+            min_p=model_settings.get("min_p", 0.2),
+            repeat_penalty=model_settings.get("repetition_penalty", 1.05),
+            mirostat_mode=model_settings.get("mirostat_mode", 0),
+            stream=False,
+            tools=get_available_tools(),
+            tool_choice=tool_choice
+        )
+        
+        message = output["choices"][0]["message"]
+        # If Tool Call
+        if "tool_calls" in message:
+            tool_calls = message["tool_calls"]
+            print("\n\n\n\n\nTOOL CALLED: ", tool_calls, "\n\n\n\n\n")
+            self.toolSignal.emit(chat_id, tool_calls)
+            return None
+
+        full_response = message["content"]
+        return full_response
         
     # ============================================================
     #                    TOKEN HANDLING
@@ -185,7 +208,11 @@ class LLMEngine(QObject):
     def estimate_tokens(self, text: str) -> int:
         return int(len(text.split()) * 1.3)
     
-    def trim_messages_to_budget(self, messages, max_context, max_tokens):
+    def trim_messages_to_budget(self, messages, model_name):
+        model_settings = self.settings.get_settings()["model_settings"][model_name]
+        max_context = model_settings.get("max_content", 4096)
+        max_tokens = model_settings.get("max_tokens", 1024)
+
         # print("TRIMMING", {
         #     "mesages": messages,
         #     "max_context": max_context,
@@ -200,11 +227,11 @@ class LLMEngine(QObject):
             tokens = self.estimate_tokens(msg["content"])
             if total + tokens > budget:
                 break
-            trimmed.insert(0, msg)
+            trimmed.append(msg)
             total += tokens
 
         # print("TRIMMED", trimmed)
-        return trimmed
+        return list(reversed(trimmed))
     
     def compute_budget(self, model_name):
         model_settings = self.settings.get_settings()["model_settings"][model_name]

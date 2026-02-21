@@ -141,11 +141,11 @@ def create_backend():
     llm_engine = LLMEngine(model_manager, settings)
 
     orchestrator = Orchestrator(
-        llm_engine, rag_pipeline, settings, system_db, user_db=db, chat_service=chat_service
+        llm_engine, rag_pipeline, settings, db, chat_service=chat_service
     )
     
     chat_state = ChatState()
-    chat_service = ChatService(system_db, db, orchestrator)
+    chat_service = ChatService(system_db, orchestrator)
 
     
 
@@ -156,7 +156,7 @@ def create_backend():
         except Exception:
             pass
 
-    bridge = BackendBridge(current_tasks, settings, chat_service)
+    bridge = BackendBridge(current_tasks, settings, system_db, db, model_manager, rag_pipeline)
 
     engine.rootContext().setContextProperty("backend", bridge)
     engine.rootContext().setContextProperty("ChatState", chat_state)

@@ -72,6 +72,7 @@ class SystemDatabase:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 title TEXT NOT NULL,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                has_title INTEFER DEFAULT 0,
                 pinned INTEGER DEFAULT 0
             );
 
@@ -117,6 +118,12 @@ class SystemDatabase:
         rows = cursor.fetchall()
         results = [dict(r) for r in rows]
         return results
+    
+    def get_chat_by_id(self, id):
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT * FROM chats WHERE id=?", (id,))
+        chat = cursor.fetchone()
+        return dict(chat) if chat else None
 
     def create_chat(self, title):
         cursor = self.conn.cursor()
@@ -127,7 +134,7 @@ class SystemDatabase:
         self.conn.commit()
         return cursor.lastrowid
     
-    def edit_chat_title(self, title, id):
+    def edit_chat_title(self, title, id, has_title=False):
         cursor = self.conn.cursor()
         cursor.execute (
             """
@@ -136,6 +143,14 @@ class SystemDatabase:
                 WHERE id=?
             """, (title, id,)
         )
+        if has_title:
+            cursor.execute (
+                """
+                    UPDATE chats
+                    SET has_title
+                    WHERE id=?
+                """, (True, id,)
+            )
         self.conn.commit()
 
     def delete_chat(self, chat_id):

@@ -3,27 +3,23 @@ from PySide6.QtCore import Signal, QObject
 from backend.ai.llm_engine import LLMEngine
 from backend.ai.rag_pipeline import RAGPipeline
 from backend.settings import Settings
-from backend.databases.system_db import SystemDatabase
 from backend.databases.user_db import UserDatabase
 from backend.ai.prompt_builder import PromptBuilder
 from backend.ai.identity_manager import IdentityManager
 from backend.tools.search_files import search_files
 
 class Orchestrator(QObject):
-    summaryCommit = Signal(str, dict)
-
-    def __init__(self, llm_engine: LLMEngine, rag_pipeline: RAGPipeline, settings: Settings, system_db: SystemDatabase, user_db: UserDatabase, chat_service):
+    def __init__(self, llm_engine: LLMEngine, rag_pipeline: RAGPipeline, settings: Settings, user_db: UserDatabase, chat_service):
         super().__init__()
         self.llm = llm_engine
         self.rag = rag_pipeline
         self.settings = settings
-        self.system_db = system_db
         self.user_db = user_db
         self.chat_service = chat_service
 
-        self.llm.generationFinished.connect(self._handle_generationFinished)
+        self.identity = IdentityManager()
+
         self.llm.toolSignal.connect(self.execute_tool)
-        self.llm.titleSignal.connect(self.on_title_results)
 
     # ============================================================
     #                    PROMPT HANDLING
@@ -75,8 +71,7 @@ class Orchestrator(QObject):
     #                    PROMPT TO AI
     # ============================================================
     def _fast_flow(self, messages: list, chat_id: int, system_prompt="You are a helpful assistant.", source="chat"):
-        identity = IdentityManager()
-        identity_text = identity.get_identity()
+        identity_text = self.identity.get_identity()
         self.llm.generate(
             chat_id=chat_id,
             model_name="instruct",
@@ -86,12 +81,11 @@ class Orchestrator(QObject):
         )
     
     def _thinking_flow(self, messages: list, chat_id: int, system_prompt: str = "Think step by step before answering", system_prompt2: str = "Provide a clear structure answer.", source="chat"):
-        identity = IdentityManager()
-        builder = PromptBuilder(self.llm, "instruct", identity_text=identity.get_identity())
+        builder = PromptBuilder(self.llm, "instruct", identity_text=self.identity.get_identity())
         builder.set_system_instructions(
-            f"Provide a clear, structed answer in under "
+            f"Provide a clear, structured answer in under "
             f"{self.settings.get_settings()['model_settings']['instruct']['max_tokens']} tokens."
-            f"Do not halllucinate."
+            f"Do not hallucinate."
         )
 
         # Chat history
@@ -100,7 +94,7 @@ class Orchestrator(QObject):
         # RAG
         retrieved = self.rag.retrieve(messages)
         if retrieved:
-            builder.add_rag(chunk["text"] for chunk in retrieved)
+            builder.add_rag([chunk["text"] for chunk in retrieved])
 
         # Memory
         query_embedding = self.rag.embedding_engine.embed(
@@ -140,76 +134,78 @@ class Orchestrator(QObject):
         )
 
     def _tool_flow(self, messages, chat_id: int):
-        identity = IdentityManager()
         self.llm.generate(
             chat_id=chat_id,
             model_name="instruct",
             messages=messages[-6:],
-            system_prompt=identity.get_identity(),
+            system_prompt=self.identity.get_identity(),
             source="chat",
             phase="instruct",
             tool_choice="required"
         )
+
+    def handle_thinking_prompt(self, results, transfer):
+        reasoning_text = results["text"]
+        builder = PromptBuilder(self.llm, "instruct", identity_text=self.identity.get_identity())
+        builder.set_system_instructions(
+            f"Provide a clear, structured answer in under "
+            f"{self.settings.get_settings()['model_settings']['instruct']['max_tokens']} tokens."
+            f"Do not hallucinate. {transfer['system_prompt']}"
+        )
+            # Chat history
+        builder.add_chat_history(transfer["messages"][:-1], no_reverse=True)
+
+        # Reasoning
+        builder.set_reasoning(reasoning_text)
+
+        final_messages = builder.build(
+            user_message=transfer["user_prompt"]
+        )
+
+        self.llm.generate(
+            chat_id=transfer["chat_id"],
+            model_name="instruct",
+            messages=final_messages,
+            system_prompt="",
+            source="chat"
+        )
+
     # ============================================================
     #                    INTERNAL FINISHED PROMPTS
     # ============================================================
-    def _handle_generationFinished(self, phase, results, transfer):
-        if not results["success"]:
-            return
-        
-        if phase == "summary":
-            if not results["success"]:
-                print(f"\n\nSUMMARY FAILED: {results["error"]}\n\n")
-                return
-            
-            summary_text = results["text"]
-            if summary_text.strip():
-                embedding = self.rag.embedding_engine.embed(summary_text)
-                self.user_db.add_memory_with_embedding(
-                    type="summary",
-                    category="conversation",
-                    content=summary_text,
-                    embedding=embedding,
-                    source="ai",
-                    importance=2,
-                    confidence=0.9
-                )
-            self.summaryCommit.emit(summary_text, transfer)
-            return
-        
-        elif phase == "thinking":
-            reasoning_text = results["text"]
+    def generate_title(self, messages, chat_id):
+        system_prompt="""
+            In 5-20 words, create a summary of the chat so for.
+            Add emoji(s) to the front of summary that best fit summary 
+        """
+        self.llm.generate(
+            chat_id=chat_id,
+            model_name="instruct",
+            messages=messages,
+            system_prompt=system_prompt,
+            source="title"
+        )
 
-            identity = IdentityManager()
-            builder = PromptBuilder(self.llm, "instruct", identity_text=identity.get_identity())
-            builder.set_system_instructions(
-                f"Provide a clear, structed answer in under "
-                f"{self.settings.get_settings()['model_settings']['instruct']['max_tokens']} tokens."
-                f"Do not halllucinate. {transfer["system_prompt"]}"
-            )
-             # Chat history
-            builder.add_chat_history(transfer["messages"][:-1], no_reverse=True)
-
-            # Reasoning
-            builder.set_reasoning(reasoning_text)
-
-            final_messages = builder.build(
-                user_message=transfer["user_prompt"]
-            )
-
-            self.llm.generate(
-                chat_id=transfer["chat_id"],
-                model_name="instruct",
-                messages=final_messages,
-                system_prompt="",
-                source="chat"
-            )
-
-    def on_title_results(self, results, chat_id):
-        if results["success"]:
-            self.system_db.edit_chat_title(results["text"], chat_id)
-        else:
-            print(f"Failed to generate title: {results["error"]}")
+    def generate_summary(self, messages_to_summarize: list, transfer):
+        from backend.ai.prompt_builder import PromptBuilder
+        builder = PromptBuilder(self.llm, "instruct")
+        builder.set_system_instructions("""
+            Summarize the following conversation clearly and concisely.
+            Preserve important facts, goals, decisions, and constraints.
+            Do not invent information.
+        """)
+        builder.add_chat_history(messages_to_summarize)
+        final_messages = builder.build(
+            user_message="Create a memory summary of the above conversation"
+        )
+        self.llm.generate(
+            chat_id=transfer["chat_id"],
+            model_name="instruct",
+            messages=final_messages,
+            system_prompt="",
+            source="summary",
+            past_transfer=transfer,
+        )
 
     # ============================================================
     #                    TOOL CALLING
@@ -228,7 +224,7 @@ class Orchestrator(QObject):
                     self.chat_service.append_message(
                         chat_id, {
                             "role": "assistant",
-                            "content": None,
+                            "content": "[Tool Call: search_files]",
                             "tool_calls": [tool_call],
                     })
                     self.chat_service.append_message(
@@ -238,19 +234,23 @@ class Orchestrator(QObject):
                             "tool_call_id": tool_call["id"]
                     })
                     messages = self.chat_service.get_messages(chat_id)
-                    identy = IdentityManager()
 
                     self.llm.generate(
                         model_name="instruct",
                         messages=messages,
-                        system_prompt=identy.get_identity(),
+                        system_prompt=self.identity.get_identity(),
                         source="tool",
                         chat_id=chat_id
                     )
                 else:
-                    self.llm.generationFinished({
+                    self.llm.generationFinished.emit("tool", {
                         "success": False,
                         "error": "File search failed"
+                    }, {
+                        "chat_id": chat_id,
+                        "phase": "tool",
+                        "source": "tool",
+                        "messages": self.chat_service.get_messages(chat_id)
                     })
 
             if name == "web_search":

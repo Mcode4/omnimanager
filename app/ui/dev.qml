@@ -54,7 +54,10 @@ Item {
         // 2. Sidebar Context
         Rectangle {
             id: sidebarContext
-            width: sidebarVisible ? 220 : 0
+            property bool allowed: currentPage < 2
+            
+            width: (sidebarVisible && allowed) ? 220 : 0
+            visible: allowed
             color: "#222"
             Layout.fillHeight: true
 

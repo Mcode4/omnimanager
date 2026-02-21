@@ -18,20 +18,20 @@ ColumnLayout {
     // Processing Indicator
     Label {
         visible: processing
-        text: "Processing..."
+        text: "⚙️ Processing..."
         color: "gray"
     }
 
     // Loading Indicator
     Label {
         visible: thinking
-        text: "Thinking..."
+        text: "🤔 Thinking..."
         color: "gray"
     }
 
     Label {
         visible: tooling
-        text: "Using Tools..."
+        text: "🛠️ Using tools..."
         color: "gray"
     }
 
