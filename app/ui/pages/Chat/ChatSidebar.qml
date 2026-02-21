@@ -47,7 +47,7 @@ ColumnLayout {
             Layout.fillWidth: true
             height: 30
             onClicked: {
-                loadChats(true)
+                backend.chatActions("get")
             }
 
             Text {
@@ -88,7 +88,8 @@ ColumnLayout {
                     onClicked: {
                         chatList.currentIndex = index
                         root.currentId = model.id
-                        root.chatSelected(model.id)
+                        // root.chatSelected(model.id)
+                        root.loadMessages(model.id)
                     }
 
                     Text {
@@ -105,10 +106,13 @@ ColumnLayout {
                     onClicked: {
                         if(currentId === -1) currentId = 0
                         console.log("INDEX DELETING", index)
+
                         if(index === 0) Qt.callLater(()=> focusToCurrentChat())
                         let chat = chatModel.get(index)
+                        
                         console.log("CHAT", chat)
-                        backend.remove_chat(chat.id)
+                        backend.chatActions("delete", chat.id)
+                        // backend.remove_chat(chat.id)
                         chatModel.remove(index, 1)
                     }
                 }
@@ -116,21 +120,21 @@ ColumnLayout {
         }
     }
 
-    function loadChats(check) {
-        if (!check) return
-        chatModel.clear()
+    // function loadChats(check) {
+    //     if (!check) return
+    //     chatModel.clear()
 
-        let chats = backend.getChats()
-        for(let i=0; i<chats.length; i++) {
-            console.log("CHATS APPENDING", chats[i])
-            console.log("APPENDING CHATS")
-            chatModel.append(chats[i])
-        }
+    //     let chats = backend.getChats()
+    //     for(let i=0; i<chats.length; i++) {
+    //         console.log("CHATS APPENDING", chats[i])
+    //         console.log("APPENDING CHATS")
+    //         chatModel.append(chats[i])
+    //     }
 
-        Qt.callLater(function() {
-            focusToCurrentChat()
-        })
-    }
+    //     Qt.callLater(function() {
+    //         focusToCurrentChat()
+    //     })
+    // }
 
     function focusToCurrentChat() {
         chatList.currentIndex = 0
@@ -140,17 +144,34 @@ ColumnLayout {
         root.currentId = firstChat.id
         console.log("FOCUSED ID: ", firstChat.id)
         root.chatSelected(firstChat.id)
-        
+        return firstChat.id
     }
 
-    function loadMessages(id) {
-        let messages = backend.getMessages(id)
+    function loadMessages(chatId) {
+        let messages = backend.messageActions("get", chatId)
         // console.log("MESSAGES RETURNED:", messages)
     }
 
     Connections {
         target: backend
+
+        function onChatsData(chats) {
+            chatModel.clear()
+
+            chats.forEach(c => {
+                console.log("\n\n\n\n CHATS:",c)
+                chatModel.append(c)
+            })
+
+            Qt.callLater(function() {
+                currentId = focusToCurrentChat()
+                loadMessages(currentId)
+            })
+        }
         
     }
-    Component.onCompleted: loadChats(true)
+    Component.onCompleted: { 
+        // loadChats(true)
+        backend.chatActions("get")
+    }
 }

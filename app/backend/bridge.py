@@ -27,6 +27,12 @@ class AIWorker(QObject):
     chatCreated = Signal(int)
     messagesLoaded = Signal(list)
 
+    chatData = Signal(list)
+    chatActionFinished = Signal()
+
+    messageData = Signal(list)
+    messageActionFinished = Signal()
+
     def __init__(self, system_db, user_db, settings, model_manager, rag_pipeline):
         super().__init__()
         self.system_db = system_db
@@ -121,20 +127,64 @@ class AIWorker(QObject):
     # ============================================================
     #                    CHAT DATA-SIGNAL HANDLING
     # ============================================================
-    @Slot(result="QVariantList")
-    def getChats(self):
+    def handle_chat_actions(self, action_tuple):
+        action, id, data = action_tuple
+        print("CHAT ACTION RECIEVED IN HANDLER", {action, id, data})
+        if action == "get":
+            chats = self._get_chats()
+            print("SUCCESS, EMITTING GET FOR CHAT ACTION")
+            self.chatData.emit(chats)
+            return
+        
+        elif id is None:
+            return
+        
+        elif action == "update":
+            if not data:
+                return
+            if len(data) > 25:
+                title = data[:25]
+            else:
+                title = data
+            self.system_db.edit_chat_title(title, id, has_title=True)
+            self.chatActionFinished.emit()
+            return
+        
+        else:
+            self._remove_chat(id)
+            self.chatActionFinished.emit()
+            return
+        
+    def handle_message_actions(self, action_tuple):
+        action, id, data = action_tuple
+        if id is None:
+            return
+        if action == "get":
+            messages = self._get_messages(id)
+            self.messageData.emit(messages)
+            return
+        
+        elif data is None:
+            return
+        
+        elif action == "update":
+            # No generate function yet
+            return
+        
+    # @Slot(result="QVariantList")
+    def _get_chats(self):
         chats = self.chat_service.system_db.get_chats()
         print("CHATS BEFORE BRIDGE: ", chats)
         return chats if chats else []
     
-    @Slot(int, result="QVariantList")
-    def getMessages(self, chat_id):
+    # @Slot(int, result="QVariantList")
+    def _get_messages(self, chat_id):
         messages = self.chat_service.system_db.get_messages_by_chat(chat_id)
         print("MESSAGES BRIDGE", messages, f"CHAT ID:", chat_id)
-        self.messagesLoaded.emit(messages if messages else [])
+        return messages
 
-    @Slot(int)
-    def remove_chat(self, chat_id):
+    # @Slot(int)
+    def _remove_chat(self, chat_id):
         removed_chat = self.chat_service.system_db.delete_chat(chat_id)
         print(f"\n\n\nREMOVED CHAT: {removed_chat} CHAT ID: {chat_id}\n\n\n")
 
@@ -155,6 +205,14 @@ class BackendBridge(QObject):
     phaseState = Signal(dict)
 
     chatCreated = Signal(int)
+
+    chatAction = Signal(tuple)
+    chatsData = Signal(list)
+    chatActionsFinished = Signal()
+
+    messageAction = Signal(tuple)
+    messagesData = Signal(list)
+    messageActionsFinished = Signal()
 
     def __init__(self, current_tasks, settings, system_db, user_db, model_manager, rag_pipeline):
         super().__init__()
@@ -204,13 +262,15 @@ class BackendBridge(QObject):
         self.ai_worker.started.connect(self.aiStarted)
         self.ai_worker.tokenGenerated.connect(self.aiTokens)
         self.ai_worker.finished.connect(self._on_ai_finished)
-
-        # chat_service.messageFinished.connect(self._on_ai_finished)
-        # chat_service.chatCreated.connect(self.newChatCreated)
-        # chat_service.thinkingBridge.connect(self.modelThinking)
-        # chat_service.toolingBridge.connect(self.modelTooling)
-
         self.ai_worker.chatCreated.connect(self.chatCreated)
+
+        self.chatAction.connect(self.ai_worker.handle_chat_actions)
+        self.ai_worker.chatData.connect(self.chatsData)
+        self.ai_worker.chatActionFinished.connect(self.chatActionsFinished)
+
+        self.messageAction.connect(self.ai_worker.handle_message_actions)
+        self.ai_worker.messageData.connect(self.messagesData)
+        self.ai_worker.messageActionFinished.connect(self.messageActionsFinished)
 
         # ================== START THREADS ==================
         self.system_thread.start()
@@ -283,6 +343,27 @@ class BackendBridge(QObject):
         
         self.aiResults.emit(results)
         self._try_process_next_ai()
-
     
+    # ============================================================
+    #                    CHAT PROCESSES
+    # ============================================================
+    @Slot(str)
+    @Slot(str, int)
+    @Slot(str, int, str)
+    def chatActions(self, action, id=None, data=None):
+        print("\n\nACTION RECEIVED", {action, id, data})
+        if action in ("get", "update", "delete"):
+            print("forwarding chat action...")
+            self.chatAction.emit(( action, id, data ))
+        else:
+            return
+    
+    @Slot(str)
+    @Slot(str, int)
+    @Slot(str, int, dict)
+    def messageActions(self, action, id=None, data=None):
+        print("\n\nACTION RECEIVED", {action, id, data})
+        if action in ("get", "regenerate"):
+            print("forwarding message action...")
+            self.messageAction.emit((action, id, data))
     

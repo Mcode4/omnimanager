@@ -8,32 +8,13 @@ ColumnLayout {
     spacing: 10
 
     property int chatId: -1
+    property int streamingIndex: -1
     
     property bool processing: false
     property bool thinking: false
     property bool tooling: false
 
     ListModel { id: messageModel }
-
-    // Processing Indicator
-    Label {
-        visible: processing
-        text: "⚙️ Processing..."
-        color: "gray"
-    }
-
-    // Loading Indicator
-    Label {
-        visible: thinking
-        text: "🤔 Thinking..."
-        color: "gray"
-    }
-
-    Label {
-        visible: tooling
-        text: "🛠️ Using tools..."
-        color: "gray"
-    }
 
     // Chat Log
     ScrollView {
@@ -61,6 +42,26 @@ ColumnLayout {
     }
 
     // Item { Layout.fillHeight: true }
+
+    // Processing Indicator
+    Label {
+        visible: processing
+        text: "⚙️ Processing..."
+        color: "gray"
+    }
+
+    // Loading Indicator
+    Label {
+        visible: thinking
+        text: "🤔 Thinking..."
+        color: "gray"
+    }
+
+    Label {
+        visible: tooling
+        text: "🛠️ Using tools..."
+        color: "gray"
+    }
 
     // Input Row
     RowLayout {
@@ -95,27 +96,28 @@ ColumnLayout {
 
     
 
-    function loadMessages(id) {
-        chatPage.chatId = id
-        console.log("LOADING ID:", id, "CHAT ID NOW:", chatPage.chatId)
-        if(id === -1) {
-            messageModel.clear()
-            return
-        }
-        backend.getMessages(id)
-    }
+    // function loadMessages(id) {
+    //     chatPage.chatId = id
+    //     console.log("LOADING ID:", id, "CHAT ID NOW:", chatPage.chatId)
+    //     if(id === -1) {
+    //         messageModel.clear()
+    //         return
+    //     }
+    //     backend.messageActions("get", id)
+    // }
 
     // Backend Connections
     Connections {
         target: backend
 
         // Loading
-        function onMessagesLoaded(messages) {
+        function onMessagesData(messages) {
             console.log("\n\n\nLOADED MESSAGES\n\n\n")
             if(
                 !messages || 
                 messages.length === 0 || 
-                ChatState.streamIndex(chatId) !== -1
+                // ChatState.streamIndex(chatId) !== -1
+                ChatState.streamTokens(chatId) !== ""
             ) return
             messageModel.clear()
             // console.log("MESSAGE RESULTS", messages)
@@ -133,7 +135,8 @@ ColumnLayout {
          function onAiStarted() {
             ChatState.setProcessing(chatPage.chatId, true)
             ChatState.setStreamTokens(chatPage.chatId, "")
-            ChatState.setStreamIndex(chatPage.chatId, -1)
+            // ChatState.setStreamIndex(chatPage.chatId, -1)
+            streamingIndex = -1
 
             console.log(`\n\n\n\n\nMODEL STARTED...\n
                 PROCESSING STATE: ${ChatState.isProcessing(chatPage.chatId)}\n
@@ -162,10 +165,10 @@ ColumnLayout {
             let updated = existing + token
             ChatState.setStreamTokens(chat_id, updated)
 
-            let index = ChatState.streamIndex(chat_id)
+            // let index = ChatState.streamIndex(chat_id)
 
             if (chat_id !== chatPage.chatId) {
-                console.log(`ERROR STREAMING: STERAMING ON ID: ${chatId} CHAT ID: ${chatPage.chatId}`)
+                console.log(`NOT STREAMING: STERAMING ON ID: ${chatId} CHAT ID: ${chatPage.chatId}`)
                 return
             }
 
@@ -174,21 +177,21 @@ ColumnLayout {
                 return
             }
 
-            if (index === -1) {
-                console.log("INDEX === -1", index)
+            if (streamingIndex === -1) {
+                console.log("INDEX === -1", streamingIndex)
                 messageModel.append({
                     role: "Omni",
                     content: updated
                 })
 
-                index = messageModel.count - 1
-                ChatState.setStreamIndex(chat_id, index)
-                console.log("INDEX SET TO LAST MODEL INDEX", index)
+                streamingIndex = messageModel.count - 1
+                ChatState.setStreamIndex(chat_id, streamingIndex)
+                console.log("INDEX SET TO LAST MODEL INDEX", streamingIndex)
                 return
             }
 
-            console.log(`MESSAGES APPENDING: INDEX: ${index} CONTENT: ${updated}`)
-            messageModel.set(index, {
+            console.log(`MESSAGES APPENDING: INDEX: ${streamingIndex} CONTENT: ${updated}`)
+            messageModel.set(streamingIndex, {
                 role: "Omni",
                 content: updated
             })
@@ -201,7 +204,8 @@ ColumnLayout {
             console.log("\n\n\n\n\nMODEL FINISH\n")
             console.log(`PROCESSING: ${ChatState.isProcessing(result.chat_id)}, THINKING: ${ChatState.isThinking(result.chat_id)}, TOOLING: ${ChatState.isTooling(result.chat_id)}\n`)
             if(result.use_stream) {
-                // ChatState.setStreamTokens(result.chat_id, "")
+                ChatState.setStreamTokens(result.chat_id, "")
+                streamingIndex = -1
                 // ChatState.setStreamIndex(result.chat_id, -1)
                 // console.log(`USED STREAM TRUE, STREAM TOKENS: ${ChatState.streamTokens(result.chat_id)} STREAM INDEX: ${ChatState.streamIndex(result.chat_id)}\n\n\n\n\n`)
                 return
