@@ -215,6 +215,9 @@ class BackendBridge(QObject):
     messagesData = Signal(list)
     messageActionsFinished = Signal()
 
+    settingsChanged = Signal()
+    unsavedChanges = Signal(bool)
+
     def __init__(self, app_services):
         super().__init__()
         # ================== VARIABLES ==================
@@ -273,6 +276,9 @@ class BackendBridge(QObject):
         self.messageAction.connect(self.ai_worker.handle_message_actions)
         self.ai_worker.messageData.connect(self.messagesData)
         self.ai_worker.messageActionFinished.connect(self.messageActionsFinished)
+
+        self.settings.settingsChanged.connect(self.settingsChanged)
+        self.settings.unsavedChanges.connect(self.unsavedChanges)
 
         # ================== START THREADS ==================
         self.system_thread.start()

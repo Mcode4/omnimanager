@@ -1,5 +1,6 @@
 import os
 import json
+import copy
 from PySide6.QtCore import QObject, Slot, Signal
 
 class Settings(QObject):
@@ -99,6 +100,7 @@ class Settings(QObject):
         }
 
         self._pending_changes = {}
+        self._default = copy.deepcopy(self._settings)
 
     def get_settings(self):
         return self._settings
@@ -109,7 +111,13 @@ class Settings(QObject):
             return
         loaded = json.loads(raw)
         self.settingsChanged.emit()
+        self.unsavedChanges.emit(False)
         return self._deep_update(self._settings, loaded)
+    
+    def load_defaults(self):
+        self._settings = self._default
+        self.settingsChanged.emit()
+        self.unsavedChanges.emit(False)
     
     def _deep_update(self, base, updates):
         for key, value in updates.items():

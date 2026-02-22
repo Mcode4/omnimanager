@@ -41,20 +41,20 @@ ColumnLayout {
         }
         // Processing Indicator
         Label {
-            visible: root.processing
+            visible: root.processing ? processing : false
             text: "⚙️ Processing..."
             color: "gray"
         }
 
         // Loading Indicator
         Label {
-            visible: root.thinking
+            visible: root.thinking ? thinking : false
             text: "🤔 Thinking..."
             color: "gray"
         }
 
         Label {
-            visible: root.tooling
+            visible: root.tooling ? tooling : false
             text: "🛠️ Using tools..."
             color: "gray"
         }
@@ -230,6 +230,7 @@ ColumnLayout {
         target: ChatState
 
         function onStateChanged(id) {
+            // console.log("\n\nID:", id, "CHATID:", chatPage.chatId)
             if (id !== chatPage.chatId)
                 return
 
