@@ -7,7 +7,7 @@ Item {
     id: root
     anchors.fill: parent
 
-    property int currentPage: 4
+    property int currentPage: 0
     property bool sidebarVisible: true
     property int initialIndex: -1
 
@@ -54,7 +54,7 @@ Item {
         // 2. Sidebar Context
         Rectangle {
             id: sidebarContext
-            property bool allowed: currentPage < 2
+            property bool allowed: currentPage === 1 || currentPage === 0
             
             width: (sidebarVisible && allowed) ? 220 : 0
             visible: allowed
@@ -62,7 +62,7 @@ Item {
             Layout.fillHeight: true
 
             Behavior on width {
-                NumberAnimation { duration: 200; easing.type: InOutQuad }
+                NumberAnimation { duration: 200; easing.type: Easing.InOutQuad }
             }
 
             Loader {

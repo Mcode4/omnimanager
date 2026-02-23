@@ -4,6 +4,7 @@ from backend.ai.orchestrator import Orchestrator
 
 class ChatService(QObject):
     chatCreated = Signal(int, str)
+    chatLogs = Signal(int, str, str)
 
     def __init__(self, system_db: SystemDatabase, orchestrator: Orchestrator):
         super().__init__()
@@ -20,6 +21,7 @@ class ChatService(QObject):
         if not chat_id or chat_id <= 0:
             chat_id = self.system_db.create_chat(prompt[:25])
             self.chatCreated.emit(chat_id, prompt[:25])
+            self.chatLogs.emit(2, "chat", f"New chat created id:{chat_id}")
 
         user_msg_id = self.system_db.create_message(chat_id, "user", prompt)
         user_msg = self.system_db.get_message_by_id(user_msg_id)
@@ -43,37 +45,23 @@ class ChatService(QObject):
     #                    CACHING
     # ============================================================
     def get_messages(self, chat_id: int):
-        if not chat_id:
-            print("no chat_id")
+        if not self.chat_cache[chat_id]:
+            self.chatLogs.emit(4, "chat", f"get messages failed. No chats found with id:{chat_id}")
+            print(f"no chats on chat_id:{chat_id}")
         return self.chat_cache.get(chat_id, [])
 
     def append_message(self, chat_id: int, message: dict):
-        if message:
-            if not chat_id:
-                print("no chat_id")
-            else:
-                self.system_db.create_message(chat_id, message["role"], message.get("content", ""))
-                if chat_id not in self.chat_cache:
-                    self.chat_cache[chat_id] = []
-                self.chat_cache[chat_id].append(message)
+        if not self.chat_cache[chat_id]:
+            self.chatLogs.emit(3, "chat", f"append messages. No chats found with id:{chat_id}. Creating new chat with id:{chat_id}")
+            self.chat_cache[chat_id] = []
+
+        self.system_db.create_message(chat_id, message["role"], message.get("content", ""))
+        self.chat_cache[chat_id].append(message)
         return self.chat_cache[chat_id]
 
     # ============================================================
     #                    ASSISTING CHAT WITH AI
     # ============================================================
-    # def _generate_title(self, messages, chat_id):
-    #     system_prompt="""
-    #         In 5-20 words, create a summary of the chat so for.
-    #         Add emoji(s) to the front of summary that best fit summary 
-    #     """
-    #     self.orchestrator.llm.generate(
-    #         chat_id=chat_id,
-    #         model_name="instruct",
-    #         messages=messages,
-    #         system_prompt=system_prompt,
-    #         source="title"
-    #     )
-
     def _maybe_summarize(self, messages: list, transfer):
         summary_settings = self.orchestrator.settings.get_settings()["summary_settings"]
         max_messages = summary_settings.get("max_message", 8)
@@ -90,27 +78,6 @@ class ChatService(QObject):
         to_summarize = messages[:-keep_fresh]
 
         return self.orchestrator.generate_summary(to_summarize, transfer)
-
-    # def _run_summary(self, messages_to_summarize: list, transfer):
-    #     from backend.ai.prompt_builder import PromptBuilder
-    #     builder = PromptBuilder(self.orchestrator.llm, "instruct")
-    #     builder.set_system_instructions("""
-    #         Summarize the following conversation cleary and concisely.
-    #         Preserve important facts, goals, decisions, and constraints.
-    #         Do not invent information.
-    #     """)
-    #     builder.add_chat_history(messages_to_summarize)
-    #     final_messages = builder.build(
-    #         user_message="Create a memory summary of the above converstion"
-    #     )
-    #     self.orchestrator.llm.generate(
-    #         chat_id=transfer["chat_id"],
-    #         model_name="instruct",
-    #         messages=final_messages,
-    #         system_prompt="",
-    #         source="summary",
-    #         past_transfer=transfer,
-    #     )
 
     def add_summary(self, summary, transfer):
         summary_settings = self.orchestrator.settings.get_settings()["summary_settings"]
@@ -131,7 +98,8 @@ class ChatService(QObject):
         if results["success"]:
             self.system_db.edit_chat_title(results["text"], chat_id)
         else:
-            print(f"Failed to generate title: {results["error"]}")
+            self.chatLogs(5, "title", f"failed to add chat title at id:{chat_id}. Error:{results['error']}")
+            print(f"Failed to generate title: {results['error']}")
 
     # ============================================================
     #                    TOKEN HANDLING FOR STREAMING

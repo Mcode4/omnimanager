@@ -34,6 +34,8 @@ class AIWorker(QObject):
     messageData = Signal(list)
     messageActionFinished = Signal()
 
+    aiLogSignal = Signal(int, str, str)
+
     def __init__(self, system_db, user_db, settings, model_manager, rag_pipeline):
         super().__init__()
         self.system_db = system_db
@@ -72,6 +74,10 @@ class AIWorker(QObject):
         llm.generationFinished.connect(self._handle_finished)
         chat_service.chatCreated.connect(self.chatCreated)
 
+        llm.llmLogs.connect(self.aiLogSignal)
+        orchestrator.orchestrateLogs.connect(self.aiLogSignal)
+        chat_service.chatLogs.connect(self.aiLogSignal)
+
     # ============================================================
     #                    AI PROMPTING/HANDLING
     # ============================================================
@@ -85,6 +91,7 @@ class AIWorker(QObject):
     def _handle_finished(self, phase, results, transfer):
         if not results["success"]:
             self.finished.emit(results)
+            self.aiLogSignal.emit(4, "generation finished", f"Error:{results['error']}, phase:{phase} on chat id:{chat_id}")
             return
         
         # ================== INTERNAL FINISHED PROMPTS ==================
@@ -102,9 +109,11 @@ class AIWorker(QObject):
                     importance=2,
                     confidence=0.9
                 )
+            self.aiLogSignal.emit(1, "generation finished", f"summary successful:{results}")
             return
         
         elif phase == "thinking":
+            self.aiLogSignal.emit(1, "thinking", f"thinking phase finished successful:{results}")
             self.orchestrator.handle_thinking_prompt(results, transfer)
             return
         
@@ -123,6 +132,7 @@ class AIWorker(QObject):
                 "total_tokens": results["total_tokens"],
                 "use_stream": results["use_stream"]
             })
+            self.aiLogSignal.emit(1, "generation finished", f"llm generation successful:{results}")
             return 
 
     # ============================================================
@@ -219,6 +229,8 @@ class BackendBridge(QObject):
     unsavedChanges = Signal(bool)
     defaultSettings = Signal(bool)
 
+    logSignal = Signal(int, str, str)
+
     def __init__(self, app_services):
         super().__init__()
         # ================== VARIABLES ==================
@@ -281,6 +293,9 @@ class BackendBridge(QObject):
         self.settings.settingsChanged.connect(self.settingsChanged)
         self.settings.unsavedChanges.connect(self.unsavedChanges)
         self.settings.defaultEnabled.connect(self.defaultSettings)
+
+        self.ai_worker.aiLogSignal.connect(self.logSignal)
+        self.logSignal.connect(self.addLogs)
 
         # ================== START THREADS ==================
         self.system_thread.start()
@@ -398,3 +413,29 @@ class BackendBridge(QObject):
     @Slot()
     def setToDefault(self):
         self.settings.load_default()
+
+    # ============================================================
+    #                    LOGGING
+    # ============================================================
+    # DEBUG, INFO, WARNING, ERROR, and FATAL
+    def addLogs(self, level, category, message):
+        self.system_db.append_log(level, category, message)
+
+    @Slot(result="QVariantList")
+    def getAllLogs(self):
+        logs = self.system_db.get_logs()
+        logs = list(reversed(logs))
+        print("LOGS HIT, LOGS:", logs)
+        return logs if logs else []
+    
+    @Slot(int, result="QVariantList")
+    def getLogsByLevel(self, level):
+        logs = self.system_db.get_logs(level=level)
+        logs = list(reversed(logs))
+        return logs if logs else []
+    
+    @Slot(str, result="QVariantList")
+    def getLogsByCategory(self, category):
+        logs = self.system_db.get_logs(category=category)
+        logs = list(reversed(logs))
+        return logs if logs else []

@@ -14,6 +14,8 @@ class LLMEngine(QObject):
     titleSignal = Signal(dict, int)
     toolSignal = Signal(int, list)
 
+    llmLogs = Signal(int, str, str)
+
     def __init__(self, model_manager: ModelManager, settings: Settings):
         super().__init__()
         self.model_manager = model_manager
@@ -48,21 +50,25 @@ class LLMEngine(QObject):
         # No Model Error Handling
         if not model:
             if source == "chat":
+                self.llmLogs.emit(5, source, f"no model active on chat id:{chat_id}")
                 self.generationFinished.emit(phase, {
                     "success": False, 
                     "error": "Model not loaded"
                 }, transfer)
             elif source == "title":
+                self.llmLogs.emit(5, source, f"no model active on chat id:{chat_id}")
                 self.titleSignal.emit({
                     "success": False, 
                     "error": "Model not loaded"
                 }, chat_id)
             elif source == "summary":
+                self.llmLogs.emit(5, source, f"no model active on chat id:{chat_id}")
                 self.generationFinished.emit({
                     "success": False, 
                     "error": "Model not loaded"
                 }, transfer)
             else:
+                self.llmLogs.emit(5, "unknown", f'no model active from "unknown source" on chat id:{chat_id}')
                 print("Model not loaded from unknown source: ", source)
             return
         
@@ -89,6 +95,7 @@ class LLMEngine(QObject):
                 )
 
             if full_response is None:
+                self.llmLogs(1, source, f"No response provided, most likely tool usages, on chat id: {chat_id}")
                 return
 
             prompt_text = "".join(m["content"] for m in messages)
@@ -105,6 +112,7 @@ class LLMEngine(QObject):
             }
 
         except Exception as e:
+            self.llmLogs(4, source, f"llm failed to generate on chat id:{chat_id}. Error:{str(e)}")
             results = {
                 "success": False,
                 "error": str(e)
@@ -120,6 +128,7 @@ class LLMEngine(QObject):
         elif source == "tool":
             self.generationFinished.emit(source, results, transfer)
         else:
+            self.llmLogs(4, "unknown", f'llm generation did not finish with an "unknown source":{source}.')
             print("UNKNOWN SOURCE: ", source)
 
     # ============================================================

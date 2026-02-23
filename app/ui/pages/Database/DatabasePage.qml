@@ -3,18 +3,15 @@ import QtQuick.Controls
 import QtQuick.Layouts
 
 Item {
-    ColumnLayout {
-        anchors.fill: parent
-        anchors.margins: 20
+    anchors.fill: parent
+    property var refreshTrigger: 0
 
-        Label {
-            text: "Database Page"
-            font.pixelSize: 22
-        }
+    RowLayout {
+        id: databaseTable
+        Layout.fillWidth: true
 
-        Label {
-            text: "No database available..."
-            color: "#888"
+        ListView {
+            Layout.fillHeight: true
         }
     }
 }

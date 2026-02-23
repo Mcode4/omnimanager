@@ -102,6 +102,7 @@ ScrollView {
                     Label { text: "Max Tokens:"; Layout.preferredWidth: 240 }
                     SpinBox {
                         value: { 
+                            editable: true
                             refreshTrigger
                             return backend.getSettings("model_settings.instruct.max_tokens")
                         }

@@ -9,6 +9,8 @@ from backend.ai.identity_manager import IdentityManager
 from backend.tools.search_files import search_files
 
 class Orchestrator(QObject):
+    orchestrateLogs = Signal(int, str, str)
+
     def __init__(self, llm_engine: LLMEngine, rag_pipeline: RAGPipeline, settings: Settings, user_db: UserDatabase, chat_service):
         super().__init__()
         self.llm = llm_engine
@@ -243,6 +245,7 @@ class Orchestrator(QObject):
                         chat_id=chat_id
                     )
                 else:
+                    self.orchestrateLogs.emit(4, "tool", f"file search failed on chat with id:{chat_id}")
                     self.llm.generationFinished.emit("tool", {
                         "success": False,
                         "error": "File search failed"

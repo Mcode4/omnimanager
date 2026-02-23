@@ -96,6 +96,7 @@ class SystemDatabase:
             CREATE TABLE IF NOT EXISTS logs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 level TEXT,
+                category TEXT,
                 message TEXT,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             );
@@ -226,20 +227,25 @@ class SystemDatabase:
     # LOGGING
     # =========================
 
-    def append_log(self, level, message):
+    def append_log(self, level, category, message):
         cursor = self.conn.cursor()
         cursor.execute(
-            "INSERT INTO logs (level, message) VALUES (?, ?)",
-            (level, message)
+            "INSERT INTO logs (level, category, message) VALUES (?, ?, ?)",
+            (level, category, message)
         )
         self.conn.commit()
 
-    def get_logs(self, level=None):
+    def get_logs(self, level=None, category=None):
         cursor = self.conn.cursor()
         if level:
             cursor.execute(
                 "SELECT * FROM logs WHERE level=? ORDER BY created_at DESC",
                 (level,)
+            )
+        elif category:
+            cursor.execute(
+                "SELCET * FROM logs WHERE category=? ORDER BY created_at DESC",
+                (category,)
             )
         else:
             cursor.execute(
