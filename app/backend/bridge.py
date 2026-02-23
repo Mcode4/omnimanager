@@ -231,6 +231,8 @@ class BackendBridge(QObject):
 
     logSignal = Signal(int, str, str)
 
+    dbData = Signal(list)
+
     def __init__(self, app_services):
         super().__init__()
         # ================== VARIABLES ==================
@@ -439,3 +441,17 @@ class BackendBridge(QObject):
         logs = self.system_db.get_logs(category=category)
         logs = list(reversed(logs))
         return logs if logs else []
+    
+    # ============================================================
+    #                    DB PAGES
+    # ============================================================
+    @Slot(results="QVariantMap")
+    def getUser(self):
+        user = self.user_db.get_user_profile()
+        return user
+    
+    # @Slot(str, str, str)
+    # def setUser(self, name, timezone, language):
+    #     self.user_db.set_user_profile(name, timezone, language)
+
+    @Slot()

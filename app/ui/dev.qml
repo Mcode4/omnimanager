@@ -7,7 +7,7 @@ Item {
     id: root
     anchors.fill: parent
 
-    property int currentPage: 0
+    property int currentPage: 2
     property bool sidebarVisible: true
     property int initialIndex: -1
 
@@ -54,7 +54,7 @@ Item {
         // 2. Sidebar Context
         Rectangle {
             id: sidebarContext
-            property bool allowed: currentPage === 1 || currentPage === 0
+            property bool allowed: currentPage < 3
             
             width: (sidebarVisible && allowed) ? 220 : 0
             visible: allowed
