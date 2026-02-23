@@ -7,7 +7,7 @@ Item {
     id: root
     anchors.fill: parent
 
-    property int currentPage: 0
+    property int currentPage: 4
     property bool sidebarVisible: true
     property int initialIndex: -1
 

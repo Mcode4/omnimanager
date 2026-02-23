@@ -2,10 +2,12 @@ import os
 import json
 import copy
 from PySide6.QtCore import QObject, Slot, Signal
+from PySide6.QtQml import QJSValue
 
 class Settings(QObject):
     settingsChanged = Signal()
     unsavedChanges = Signal(bool)
+    defaultEnabled = Signal(bool)
 
     def __init__(self, model_manager, config, system_db):
         super().__init__()
@@ -62,7 +64,7 @@ class Settings(QObject):
             "max_tasks": {
                 "ai_tasks": 3,
                 "system_tasks": 2,
-                "async_tasks": 1
+                # "async_tasks": 1
             },
             "summary_settings": {
                 "max_messages": 8,
@@ -71,7 +73,7 @@ class Settings(QObject):
             },
             "tool_settings": {
                 "search_files": {
-                    "active": True,
+                    "enabled": True,
                     "max_results": 10,
                     "search_path": os.path.expanduser("~"),
                     "restricted_paths": [],
@@ -79,7 +81,7 @@ class Settings(QObject):
                     "can_search_sub_directories": True
                 },
                 "web_search": {
-                    "active": True,
+                    "enabled": True,
                     "live_view": True
                 }
             },
@@ -88,8 +90,8 @@ class Settings(QObject):
                 "font-size": 14,
                 "markdown": True
             },
-            "error_popups": True,
             "debug": {
+                "error_popups": True,
                 "log_phases": True,
                 "log_tokens": True,
                 "log_rag": True,
@@ -99,42 +101,47 @@ class Settings(QObject):
             }
         }
 
+        self._default_settings = copy.deepcopy(self._settings)
         self._pending_changes = {}
-        self._default = copy.deepcopy(self._settings)
+        self._restart_needed = False
 
+    # ============================================================
+    #                    GETTERS/SETTERS 
+    # ============================================================
     def get_settings(self):
         return self._settings
 
     def load_settings(self):
+        self._default_settings = copy.deepcopy(self._settings)
         raw = self.db.get_setting("settings_json")
         if not raw:
             return
+        
         loaded = json.loads(raw)
-        self.settingsChanged.emit()
-        self.unsavedChanges.emit(False)
-        return self._deep_update(self._settings, loaded)
-    
-    def load_defaults(self):
-        self._settings = self._default
+        self._deep_update(self._settings, loaded)
         self.settingsChanged.emit()
         self.unsavedChanges.emit(False)
     
-    def _deep_update(self, base, updates):
-        for key, value in updates.items():
-            if isinstance(value, dict) and key in base:
-                self._deep_update(base[key], value)
-            else:
-                base[key] = value
+    def load_default(self):
+        self._settings = copy.deepcopy(self._default_settings)
+        self._pending_changes.clear()
+        self.settingsChanged.emit()
+        self.unsavedChanges.emit(True)
+        self.defaultEnabled.emit(False)
 
     def save_settings(self):
-        if self._pending_changes:
-            for path, value in self._pending_changes.items():
-                self._set(path, value)
+        for path, value in self._pending_changes.items():
+            self._set(path, value)
 
-            self.db.set_settings("settings_json", json.dumps(self._settings))
-            self._pending_changes.clear()
-            self.settingsChanged.emit()
-            self.unsavedChanges.emit(False)
+        self.db.set_settings("settings_json", json.dumps(self._settings))
+        self._pending_changes.clear()
+
+        if self._restart_needed:
+            self.toggle_model("instruct")
+            self.toggle_model("thinking")
+        
+        self.settingsChanged.emit()
+        self.unsavedChanges.emit(False)
         return
     
     @Slot(str, result="QVariant")
@@ -149,20 +156,30 @@ class Settings(QObject):
     
     @Slot(str, "QVariant")
     def pre_set(self, path, value):
-        self._pending_changes[path] = value
+        clean_value = self._convert_qml_value(value)
+        self._pending_changes[path] = clean_value
         self.unsavedChanges.emit(True)
+        self.defaultEnabled.emit(True)
     
     @Slot(str, "QVariant")
     def _set(self, path, value):
+        value = self._convert_qml_value(value)
+
         keys = path.split(".")
         ref = self._settings
         for key in keys[:-1]:
+            if(key in ("max_context", "enabled")):
+                self._restart_needed = True
             ref = ref.setdefault(key, {})
         ref[keys[-1]] = value
         return
 
+    # ============================================================
+    #                    MODEL SETTINGS
+    # ============================================================
     @Slot(str, bool)
-    def toggle_model(self, model_name: str, enabled: bool):
+    def toggle_model(self, model_name: str, **kwargs):
+        enabled = self._settings["model_settings"][model_name].get("enabled", True)
         if enabled:
             model_info = next((m for m in self.config.get("models", []) if m["name"] == model_name), None)
             if model_info:
@@ -170,12 +187,30 @@ class Settings(QObject):
                 path = model_info["model"]
                 model_type = "llama" if backend == "llama-cpp" else backend
                 params = model_info.get("parameters", {})
-
+                max_context = self._settings["model_settings"][model_name]["max_content"]
                 self.model_manager.load_model(
                     name=model_name,
                     path=path,
                     model_type=model_type,
-                    **params
+                    n_ctx=max_context,
+                    **params,
+                    **kwargs
                 )
         else:
             self.model_manager.unload_model(model_name)
+
+
+    # ============================================================
+    #                    HEPLER FUNCS
+    # ============================================================
+    def _deep_update(self, base, updates):
+        for key, value in updates.items():
+            if isinstance(value, dict) and key in base:
+                self._deep_update(base[key], value)
+            else:
+                base[key] = value
+
+    def _convert_qml_value(self, value):
+        if isinstance(value, QJSValue):
+            return value.toVariant()
+        return value

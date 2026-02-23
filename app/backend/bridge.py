@@ -217,6 +217,7 @@ class BackendBridge(QObject):
 
     settingsChanged = Signal()
     unsavedChanges = Signal(bool)
+    defaultSettings = Signal(bool)
 
     def __init__(self, app_services):
         super().__init__()
@@ -279,6 +280,7 @@ class BackendBridge(QObject):
 
         self.settings.settingsChanged.connect(self.settingsChanged)
         self.settings.unsavedChanges.connect(self.unsavedChanges)
+        self.settings.defaultEnabled.connect(self.defaultSettings)
 
         # ================== START THREADS ==================
         self.system_thread.start()
@@ -378,7 +380,7 @@ class BackendBridge(QObject):
     #                    SETTINGS PROCESSES
     # ============================================================
     @Slot(str, result="QVariant")
-    def getSetting(self, path):
+    def getSettings(self, path):
         return self.settings.get(path)
     
     @Slot(str, "QVariant")
@@ -392,3 +394,7 @@ class BackendBridge(QObject):
     @Slot()
     def reloadSettings(self):
         self.settings.load_settings()
+
+    @Slot()
+    def setToDefault(self):
+        self.settings.load_default()
