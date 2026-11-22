@@ -1,1 +1,14 @@
-PySide6
+# Runtime dependencies, derived from the imports under app/.
+# Versions are pinned only where pyproject.toml pins them.
+PySide6>=6.5
+pyxdg>=0.28
+llama-cpp-python
+transformers
+sentence_transformers
+torch
+numpy
+PyYAML
+
+# Also imported (app/backend/ai/vision_manager.py) but not installable from
+# PyPI under this name: `janus` (DeepSeek Janus-Pro, installed from its GitHub
+# repository). It is imported at startup, so install it before running.
