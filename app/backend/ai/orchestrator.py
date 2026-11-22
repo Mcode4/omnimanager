@@ -94,9 +94,9 @@ class Orchestrator(QObject):
         builder.add_chat_history(messages[:-1])
 
         # RAG
-        retrieved = self.rag.retrieve(messages)
+        retrieved = self.rag.retrieve(messages[-1]["content"])
         if retrieved:
-            builder.add_rag([chunk["text"] for chunk in retrieved])
+            builder.add_rag([chunk["content"] for chunk in retrieved])
 
         # Memory
         query_embedding = self.rag.embedding_engine.embed(
