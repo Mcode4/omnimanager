@@ -1,8 +1,14 @@
 # Python
 __pycache__/
+*.pyc
 *.py[cod]
 *.pyo
 *.pyd
+
+# Secrets / environment
+.env
+.env.*
+!.env.example
 
 # Virtual environments
 .venv/
