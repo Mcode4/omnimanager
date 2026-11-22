@@ -72,7 +72,7 @@ class Orchestrator(QObject):
     # ============================================================
     #                    PROMPT TO AI
     # ============================================================
-    def _fast_flow(self, messages: list, chat_id: int, system_prompt="You are a helpful assistant.", source="chat"):
+    def _fast_flow(self, messages: list, chat_id: int, system_prompt: str = "You are a helpful assistant.", source="chat"):
         identity_text = self.identity.get_identity()
         self.llm.generate(
             chat_id=chat_id,
@@ -135,12 +135,13 @@ class Orchestrator(QObject):
             past_transfer=transferToInstruct
         )
 
-    def _tool_flow(self, messages, chat_id: int):
+    def _tool_flow(self, messages, system_prompt: str, chat_id: int):
+        identity_text = self.identity.get_identity()
         self.llm.generate(
             chat_id=chat_id,
             model_name="instruct",
             messages=messages[-6:],
-            system_prompt=self.identity.get_identity(),
+            system_prompt=identity_text + "\n" + system_prompt,
             source="chat",
             phase="instruct",
             tool_choice="required"
