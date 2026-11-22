@@ -101,7 +101,7 @@ class AIWorker(QObject):
                 self.chat_service.add_summary(summary_text, transfer)
                 embedding = self.rag_pipeline.embedding_engine.embed(summary_text)
                 self.user_db.add_memory_with_embedding(
-                    type="summary",
+                    type_="summary",
                     category="conversation",
                     content=summary_text,
                     embedding=embedding,
@@ -453,5 +453,3 @@ class BackendBridge(QObject):
     # @Slot(str, str, str)
     # def setUser(self, name, timezone, language):
     #     self.user_db.set_user_profile(name, timezone, language)
-
-    @Slot()
